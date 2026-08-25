@@ -708,7 +708,59 @@ def ai_find_pages(pdf_bytes, api_key, target_tables, base_url, model_name, compa
 # ==========================================
 # 以下为原有财险对标报告系统（第1~10段）—— 所有函数定义移至主逻辑之前
 # ==========================================
-
+# 0.添加公司边框和标题
+def add_company_borders(fig, companies, x_labels, top_margin=60, row=1, col=1):
+    """
+    为指定的子图添加公司边框和标题。
+    fig: Plotly Figure 对象
+    companies: 公司名称列表（按顺序）
+    x_labels: x 轴标签列表（字符串），用于匹配公司名称
+    top_margin: 顶部边距
+    row, col: 子图位置
+    """
+    # 对于每个公司，在 x_labels 中找到所有包含该公司的索引
+    company_ranges = {}
+    for co in companies:
+        indices = [i for i, label in enumerate(x_labels) if co in label]
+        if indices:
+            company_ranges[co] = (min(indices), max(indices))
+    # 如果没有找到，尝试直接匹配（如果 x_labels 就是公司名）
+    if not company_ranges:
+        for co in companies:
+            if co in x_labels:
+                idx = x_labels.index(co)
+                company_ranges[co] = (idx, idx)
+    if not company_ranges:
+        return fig
+    for co, (start, end) in company_ranges.items():
+        width_extend = 0.55 if (end - start) > 0 else 0.4
+        x0 = start - width_extend
+        x1 = end + width_extend
+        fig.add_shape(
+            type="rect",
+            xref="x", yref="paper",
+            x0=x0, x1=x1,
+            y0=0, y1=1,
+            fillcolor="rgba(0,51,141,0.02)",
+            line=dict(color="#00338D", width=1.5),
+            layer="below",
+            row=row, col=col
+        )
+        fig.add_annotation(
+            x=(start + end) / 2,
+            y=1.02,
+            text=f"<b>{co}</b>",
+            showarrow=False,
+            font=dict(size=12, color="#00338D"),
+            xanchor="center",
+            yanchor="bottom",
+            xref="x",
+            yref="paper",
+            row=row, col=col
+        )
+    fig.update_layout(margin=dict(t=top_margin))
+    return fig
+    
 # 1.全局颜色工具
 def get_color_map(all_cos):
     current_selection_key = tuple(sorted(all_cos))
@@ -862,21 +914,22 @@ def show_chart(fig, p_mode, m_id=None):
             height=500,
             margin=dict(t=30, b=30, l=50, r=20)
         )
+        st.markdown('<div style="display: flex; justify-content: center; margin: 0 auto;">', unsafe_allow_html=True)
         st.plotly_chart(fig, use_container_width=False, config={"displayModeBar": False})
+        st.markdown('</div>', unsafe_allow_html=True)
     else:
         # 对趋势图模块使用固定尺寸，避免自适应导致显示不全
         if m_id in ["claim_ratio_trend", "expense_ratio_trend"]:
             fig.update_layout(
                 autosize=False,
                 width=900,
-                height=550,          # 增加高度
-                margin=dict(t=50, b=100, l=60, r=40)  # 增加底部边距，为图例留空间
+                height=550,
+                margin=dict(t=50, b=100, l=60, r=40)
             )
             st.plotly_chart(fig, use_container_width=False, config={"displayModeBar": False})
         else:
             fig.update_layout(autosize=True)
             st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-
 # 3.文本披露卡片
 def display_textual_disclosures(df, cos, cy):
     st.markdown("#### 📄 关键会计政策与精算假设披露")
@@ -1378,7 +1431,22 @@ def create_kpmg_chart(df, field_name, title_prefix, show_labels, pct_font_size, 
             line=dict(color=HL_BOX_LINE, width=1.5),
             layer="below"
         )
+    
+    # ===== 🆕 添加公司边框 =====
+    # sorted_cos 既是公司列表，也是 x 轴标签（因为 x 轴直接使用公司名称）
+    fig = add_company_borders(fig, sorted_cos, sorted_cos, top_margin=70)
 
+    fig.update_layout(
+        barmode='group',
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        bargroupgap=0.0,
+        bargap=global_gap,
+        legend=dict(orientation="h", yanchor="bottom", y=1.03, xanchor="right", x=1),
+        margin=dict(t=70, b=40, l=20, r=20),  # 顶部边距从 40 改为 70
+        height=700
+    )
+                          
     fig.update_layout(
         barmode='group',
         paper_bgcolor='rgba(0,0,0,0)',
@@ -1445,267 +1513,8 @@ def create_kpmg_chart(df, field_name, title_prefix, show_labels, pct_font_size, 
     )
 
     return fig
-    
-# 5.2 业务构成饼图（通用，支持保险服务收入和营业利润）
-def create_business_composition_pie(df, cos, year, divisor=1, unit_label="百万元", field_type="保险服务收入"):
-    """
-    绘制每个公司的业务构成饼图
-    field_type: "保险服务收入" 或 "营业利润"
-    """
-    prefix = f"{field_type}-"  # 例如 "保险服务收入-" 或 "营业利润-"
-    all_fields = df['字段名'].unique()
-    business_fields = [f for f in all_fields if isinstance(f, str) and f.startswith(prefix)]
-    # 过滤掉 "合计" 字段
-    business_fields = [f for f in business_fields if not f.endswith("合计")]
 
-    if not business_fields:
-        fig = go.Figure()
-        fig.add_annotation(
-            text=f"未找到{field_type}业务构成数据",
-            x=0.5, y=0.5, showarrow=False,
-            font=dict(size=16, color="red")
-        )
-        fig.update_layout(height=300, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-        return fig
-
-    # 筛选年份和公司
-    df_year = df[df['报告年份'].astype(str) == str(year)]
-    df_year = df_year[df_year['公司'].isin(cos)]
-
-    # 按公司收集数据
-    data = {}
-    for co in cos:
-        df_co = df_year[df_year['公司'] == co]
-        labels = []
-        values = []
-        for f in business_fields:
-            val_series = df_co[df_co['字段名'] == f]['(百万)人民币']
-            if not val_series.empty:
-                val = val_series.iloc[0] / divisor
-                if val > 0:  # 只显示正数
-                    label = f.replace(prefix, "")
-                    labels.append(label)
-                    values.append(val)
-        if values:
-            data[co] = {"labels": labels, "values": values}
-
-    if not data:
-        fig = go.Figure()
-        fig.add_annotation(
-            text="所有公司均无有效业务构成数据",
-            x=0.5, y=0.5, showarrow=False,
-            font=dict(size=16, color="red")
-        )
-        fig.update_layout(height=300, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-        return fig
-
-    # 创建子图布局（固定显示所有选中的公司，包括无数据的占位）
-    num_companies = len(cos)
-    cols = min(num_companies, 3)
-    rows = (num_companies + cols - 1) // cols
-
-    fig = make_subplots(
-        rows=rows, cols=cols,
-        subplot_titles=[co for co in cos],
-        specs=[[{'type': 'domain'} for _ in range(cols)] for _ in range(rows)]
-    )
-
-    row, col = 1, 1
-    for co in cos:
-        vals = data.get(co)
-        if vals is None:
-            # 无数据占位饼图
-            fig.add_trace(
-                go.Pie(
-                    labels=["无数据"], values=[1],
-                    marker=dict(colors=["#e0e0e0"]),
-                    hole=0.3, textinfo='none', hoverinfo='none', showlegend=False
-                ),
-                row=row, col=col
-            )
-        else:
-            fig.add_trace(
-                go.Pie(
-                    labels=vals['labels'],
-                    values=vals['values'],
-                    hole=0.3,
-                    showlegend=False,
-                    textinfo='percent+label',
-                    textposition='inside',
-                    insidetextorientation='radial',
-                    marker=dict(colors=KPMG_COLORS)
-                ),
-                row=row, col=col
-            )
-        # 更新行列
-        if col == cols:
-            col = 1
-            row += 1
-        else:
-            col += 1
-
-    # 布局设置
-    fig.update_layout(
-        height=300 * rows,
-        margin=dict(t=40, b=20, l=20, r=20),
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)'
-    )
-    for ann in fig.layout.annotations:
-        ann.update(font=dict(size=13, color="#00338D"))
-
-    return fig
-
-def create_business_composition_bar(df, cos, year, divisor=1, unit_label="百万元", field_type="承保利润", is_percentage=False, use_cluster=False):
-    """
-    绘制每个公司的业务构成堆叠条形图（支持正负值）
-    若 use_cluster=True，则绘制分组条形图，显示实际金额并标注占比（代数和）
-    """
-    # 构建前缀
-    if field_type.startswith("保险产品经营信息-"):
-        prefix = field_type + "-"
-    else:
-        prefix = f"{field_type}-"
-    
-    all_fields = df['字段名'].unique()
-    business_fields = [f for f in all_fields if isinstance(f, str) and f.startswith(prefix)]
-    business_fields = [f for f in business_fields if not f.endswith("合计")]
-
-    if not business_fields:
-        fig = go.Figure()
-        fig.add_annotation(text=f"未找到{field_type}业务构成数据", x=0.5, y=0.5, showarrow=False, font=dict(size=16, color="red"))
-        fig.update_layout(height=400, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-        return fig
-
-    df_year = df[df['报告年份'].astype(str) == str(year)]
-    df_year = df_year[df_year['公司'].isin(cos)]
-
-    pivot_data = []
-    for co in cos:
-        row = {'公司': co}
-        for f in business_fields:
-            val_series = df_year[(df_year['公司'] == co) & (df_year['字段名'] == f)]['(百万)人民币']
-            val = val_series.iloc[0] if not val_series.empty else 0
-            label = f.replace(prefix, "")
-            row[label] = val / divisor
-        pivot_data.append(row)
-    df_plot = pd.DataFrame(pivot_data)
-    display_labels = [c for c in df_plot.columns if c != '公司']
-
-    if not df_plot[display_labels].map(lambda x: x != 0).any().any():
-        fig = go.Figure()
-        fig.add_annotation(text="所有公司业务构成均为零或未披露", x=0.5, y=0.5, showarrow=False, font=dict(size=16, color="red"))
-        fig.update_layout(height=400, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-        return fig
-
-    # ---------- 簇状条形图模式 ----------
-    if use_cluster:
-        # 计算每个公司的代数和（总利润）
-        totals = df_plot[display_labels].sum(axis=1)
-        fig = go.Figure()
-        colors = KPMG_COLORS
-        for i, label in enumerate(display_labels):
-            values = df_plot[label].fillna(0).tolist()
-            # 计算占比（项目 / 总利润）
-            ratios = []
-            for val, total in zip(values, totals):
-                if total != 0:
-                    ratios.append(val / total)
-                else:
-                    ratios.append(0)
-            texts = []
-            for val, rat in zip(values, ratios):
-                if val == 0:
-                    texts.append("")
-                else:
-                    texts.append(f"{val:.1f}\n({rat:.1%})")
-            fig.add_trace(go.Bar(
-                name=label,
-                x=df_plot['公司'],
-                y=values,
-                marker_color=colors[i % len(colors)],
-                text=texts,
-                textposition='outside',
-                textfont=dict(size=9),
-                width=0.7 / len(display_labels),  # 动态宽度
-                offsetgroup=i,
-                cliponaxis=False
-            ))
-        fig.add_hline(y=0, line_dash="dash", line_color="gray", line_width=1.5, opacity=0.8)
-        y_title = f"金额（{unit_label}）"
-        tick_format = ",.0f"
-        title = f"{field_type}业务构成（金额）"
-    else:
-        # ---------- 原有堆叠逻辑（保留） ----------
-        if is_percentage:
-            abs_sum = {}
-            for co in cos:
-                vals = [df_plot[df_plot['公司'] == co][label].iloc[0] for label in display_labels]
-                total = sum(abs(v) for v in vals)
-                abs_sum[co] = total if total != 0 else 1.0
-            for co in cos:
-                for label in display_labels:
-                    val = df_plot[df_plot['公司'] == co][label].iloc[0]
-                    df_plot.loc[df_plot['公司'] == co, label] = val / abs_sum[co] * 100
-            y_title = "占比（%）"
-            tick_format = ".0f"
-            title = f"{field_type}业务构成（占比）"
-        else:
-            y_title = f"金额（{unit_label}）"
-            tick_format = ",.0f"
-            title = f"{field_type}业务构成（金额）"
-
-        fig = go.Figure()
-        colors = KPMG_COLORS
-        for i, label in enumerate(display_labels):
-            values = df_plot[label].fillna(0).tolist()
-            text_vals = [f"{v:.1f}%" if is_percentage else f"{v:.1f}" for v in values]
-            fig.add_trace(go.Bar(
-                name=label,
-                x=df_plot['公司'],
-                y=values,
-                marker_color=colors[i % len(colors)],
-                text=[v if v != 0 else "" for v in text_vals],
-                textposition='outside',
-                textfont=dict(size=9),
-                width=0.7,
-                offsetgroup=0,
-            ))
-        fig.add_hline(y=0, line_dash="dash", line_color="gray", line_width=1.5, opacity=0.8)
-
-    # ---------- 公共布局调整 ----------
-    all_vals = df_plot[display_labels].values.flatten()
-    max_val = max(all_vals) if len(all_vals) > 0 else 1
-    min_val = min(all_vals) if len(all_vals) > 0 else 0
-    padding = (max_val - min_val) * 0.3 if max_val != min_val else abs(max_val) * 0.3
-    y_range = [
-        min_val - padding if min_val < 0 else min_val - abs(min_val) * 0.2,
-        max_val + padding if max_val > 0 else max_val + abs(max_val) * 0.2
-    ]
-    if y_range[0] > 0:
-        y_range[0] = 0
-    if y_range[1] < 0:
-        y_range[1] = 0
-
-    fig.update_layout(
-        barmode='group' if use_cluster else 'relative',
-        title=title,
-        xaxis_title="公司",
-        yaxis_title=y_title,
-        xaxis=dict(tickangle=-30),
-        yaxis=dict(tickformat=tick_format, zeroline=True, zerolinecolor="gray", zerolinewidth=1.5, range=y_range),
-        height=500,
-        margin=dict(t=60, b=60, l=40, r=20),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        bargap=0.2 if not use_cluster else 0.1,
-        bargroupgap=0.1 if not use_cluster else 0.05,
-    )
-    return fig
-
-
-# 5.3 保险业务构成（两种方法占比堆叠图）
+# 5.2 保险业务构成（两种方法占比堆叠图）
 def create_method_composition_chart(df, cos, year, divisor=1, unit_label="百万元"):
     """
     绘制每家公司保险服务收入采用保费分配法与未采用保费分配法的占比堆叠图
@@ -1844,11 +1653,15 @@ def create_method_composition_chart(df, cos, year, divisor=1, unit_label="百万
             ),
             row=1, col=col_idx
         )
+        
+        # ===== 🆕 为当前子图添加公司边框 =====
+        # x_vals 是该子图的横轴标签（年份）
+        fig = add_company_borders(fig, [co], x_vals, top_margin=40, row=1, col=col_idx)
     
     fig.update_layout(
         barmode='relative',  # 堆叠模式
         height=400,
-        margin=dict(t=50, b=40, l=40, r=20),
+        margin=dict(t=40, b=40, l=40, r=20),
         legend=dict(
             orientation="h",
             yanchor="bottom",
@@ -1883,7 +1696,7 @@ def create_method_composition_chart(df, cos, year, divisor=1, unit_label="百万
     
     return fig
 
-#5.4 利润构成图
+#5.3 利润构成图
 def create_profit_composition_chart(df, cos, year, divisor=1, unit_label="百万元"):
     """
     绘制每家公司承保利润与投资利润的分组条形图（实际金额），并标注占比。
