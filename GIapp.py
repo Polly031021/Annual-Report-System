@@ -2148,7 +2148,7 @@ def create_profit_contribution_facet_chart(df, cos, year, divisor=1, unit_label=
 
     return fig
 
-# 5.6 综合赔付率拆解堆叠图（支持两年对比，优化配色）
+# 5.6 综合赔付率拆解堆叠图（修复标签，优化配色）
 def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=1, unit_label="百万元", highlight_co="无"):
     """
     绘制综合赔付率拆解的堆叠柱状图（各因子占保险服务收入比例）
@@ -2163,14 +2163,14 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
         "提取保费准备金"
     ]
     
-    # 从 KPMG_COLORS 中挑选 6 个视觉差异明显的颜色
+    # 调整配色：用淡蓝和灰色替代两个深色
     factor_colors = {
-        "当期发生赔款及理赔费用": KPMG_COLORS[0],   # #00338D 深蓝
-        "已发生赔款负债履约现金流变动": KPMG_COLORS[5],  # #510DBC 深紫
-        "亏损合同损益": KPMG_COLORS[9],   # #FD349C 粉红
-        "承保财务损益": KPMG_COLORS[11],  # #00C0AE 青绿
-        "再保净成本": KPMG_COLORS[10],   # #FB8E7E 橙红
-        "提取保费准备金": KPMG_COLORS[7]  # #7213EA 紫
+        "当期发生赔款及理赔费用": "#00338D",      # 深蓝（保留）
+        "已发生赔款负债履约现金流变动": "#510DBC", # 深紫（保留）
+        "亏损合同损益": "#B0BEC5",               # 灰色（替换深色）
+        "承保财务损益": "#76D2FF",               # 淡蓝（替换深色）
+        "再保净成本": "#FD349C",                 # 粉红（保留）
+        "提取保费准备金": "#00C0AE"              # 青绿（保留）
     }
     
     raw = df.copy()
@@ -2188,7 +2188,7 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
             service_revenue[(co, yr)] = rev.sum() if not rev.empty else 1.0
     
     # 构建数据
-    df_plot = pd.DataFrame()
+    rows = []
     for co in cos:
         for yr in years:
             row = {'公司': co, '年份': yr}
@@ -2197,12 +2197,14 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
                 val_sum = val.sum() if not val.empty else 0
                 ratio = val_sum / service_revenue[(co, yr)] * 100
                 row[f] = ratio
-            df_plot = pd.concat([df_plot, pd.DataFrame([row])], ignore_index=True)
+            rows.append(row)
+    df_plot = pd.DataFrame(rows)
     
+    # 构造横轴标签：公司名 + 换行 + 年份YE
     df_plot['x_label'] = df_plot['公司'] + '<br>' + df_plot['年份'] + 'YE'
     
     fig = go.Figure()
-    for i, f in enumerate(factors):
+    for f in factors:
         fig.add_trace(go.Bar(
             x=df_plot['x_label'],
             y=df_plot[f],
