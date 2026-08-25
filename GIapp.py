@@ -718,32 +718,32 @@ def add_company_borders(fig, companies, x_labels, top_margin=60, row=None, col=N
     if row is not None and col is not None:
         if len(companies) == 1:
             co = companies[0]
-            # 框线覆盖整个子图区域，并向上延伸到标题上方
+            # 使用 x domain / y domain 限定在子图内部
             fig.add_shape(
                 type="rect",
-                xref="paper", yref="paper",
+                xref="x domain", yref="y domain",
                 x0=0, x1=1,
-                y0=0, y1=1.08,           # 向上延伸，包裹子图标题区域
+                y0=0, y1=1.0,          # 覆盖整个子图区域（从底部到顶部）
                 fillcolor="rgba(200,200,200,0.05)",
                 line=dict(color="#CCCCCC", width=1.2),
                 layer="below",
                 row=row, col=col
             )
-            # 公司名称放在框线内部顶部（y=1.02，靠近框线顶部但不压线）
+            # 公司名称放在子图顶部内部（y=0.98）
             fig.add_annotation(
                 x=0.5,
-                y=1.02,
+                y=0.98,
                 text=f"<b>{co}</b>",
                 showarrow=False,
                 font=dict(size=12, color="#888888"),
                 xanchor="center",
                 yanchor="bottom",
-                xref="paper",
-                yref="paper",
+                xref="x domain",
+                yref="y domain",
                 row=row, col=col
             )
         return fig
-
+        
     # ===== 单图模式（原有逻辑） =====
     company_ranges = {}
     for co in companies:
