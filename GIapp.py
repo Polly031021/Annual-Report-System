@@ -744,7 +744,7 @@ def add_company_borders(fig, companies, x_labels, top_margin=60, row=None, col=N
         # 公司名称：底部对齐在 y=1.01，靠近框线顶部但不压线
         annotation_kwargs = dict(
             x=(start + end) / 2,
-            y=1.01,                     # 从 1.0 调整为 1.01，更靠近框线
+            y=0.985,                     
             text=f"<b>{co}</b>",
             showarrow=False,
             font=dict(size=12, color="#888888"),
