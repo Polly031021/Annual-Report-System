@@ -1915,24 +1915,8 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
     fig.update_xaxes(showticklabels=False)
     
     # ===== 🆕 在图表底部添加年份标注 =====
-    # 计算每个年份在x轴上的位置
-    # 由于x轴标签已被隐藏，我们用add_annotation在底部添加年份标注
-    # 获取所有公司数量，计算每个公司在x轴上的跨度
-    num_companies = len(cos)
-    # 每个公司占1个单位，两个年份分别位于每个公司的左侧和右侧
-    # 但我们不想要每个公司都标注，而是在整体底部统一标注
-    
-    # 方法：在图表底部（y=-0.08）添加两个年份标注
-    # 2024YE 标注在第一个公司左侧，2025YE 标注在最后一个公司右侧
-    # 使用 paper 坐标或 x 坐标
-    
-    # 使用 add_annotation 在底部添加年份标注
-    # 计算所有2024YE柱子的中心位置和2025YE柱子的中心位置
-    # 第1个公司2024YE在x=0.5（如果每个公司占1个单位），但x轴是类别轴，不好计算
-    
-    # 简化方案：在图表底部中央区域添加两个标注
     fig.add_annotation(
-        x=0.25,
+        x=0.20,
         y=-0.08,
         text="2024YE",
         showarrow=False,
@@ -1943,7 +1927,7 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
         yref="paper"
     )
     fig.add_annotation(
-        x=0.75,
+        x=0.80,
         y=-0.08,
         text="2025YE",
         showarrow=False,
@@ -1953,7 +1937,8 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
         xref="paper",
         yref="paper"
     )
-    
+
+    # 高亮框（如果有）
     if highlight_co != "无":
         x_labels = df_plot['x_label'].unique()
         highlight_indices = [i for i, label in enumerate(x_labels) if highlight_co in label]
@@ -1967,7 +1952,7 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
                 line=dict(color="rgba(0,51,141,0.8)", width=1.5),
                 layer="below"
             )
-    
+
     fig.update_layout(
         barmode='relative',
         title=f"综合赔付率拆解（{year_display}）",
@@ -1982,7 +1967,7 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
             font=dict(size=11)
         ),
         height=550,
-        margin=dict(l=20, r=20, t=70, b=80),  # 底部边距增大，为年份标注留空间
+        margin=dict(l=20, r=20, t=70, b=100),  # 底部边距增大到100
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
         bargap=0.15,
