@@ -913,11 +913,12 @@ def show_chart(fig, p_mode, m_id=None):
             height=500,
             margin=dict(t=30, b=30, l=50, r=20)
         )
+        # 居中包装
         st.markdown('<div style="display: flex; justify-content: center; margin: 0 auto;">', unsafe_allow_html=True)
         st.plotly_chart(fig, use_container_width=False, config={"displayModeBar": False})
         st.markdown('</div>', unsafe_allow_html=True)
     else:
-        # 对趋势图模块使用固定尺寸，避免自适应导致显示不全
+        # 非打印模式：保持原样（外层已有列包装）
         if m_id in ["claim_ratio_trend", "expense_ratio_trend"]:
             fig.update_layout(
                 autosize=False,
@@ -929,6 +930,7 @@ def show_chart(fig, p_mode, m_id=None):
         else:
             fig.update_layout(autosize=True)
             st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+            
 # 3.文本披露卡片
 def display_textual_disclosures(df, cos, cy):
     st.markdown("#### 📄 关键会计政策与精算假设披露")
@@ -3080,7 +3082,8 @@ def render_pure_chart_entity(m_id, print_mode):
     # ====== 概览模块 ======
     if m_id in ["概览", "overview"]:
         fig = create_overview_table(df_filtered, selected_cos, latest_year, prev_year, unit_label)
-        st.plotly_chart(fig, use_container_width=True)
+        # 替换原来的 st.plotly_chart
+        show_chart(fig, print_mode, m_id)
         display_notes(m_id, df_filtered, "概览")
         display_bottom_note(notes_dict.get(m_id, {}).get('note', ''))
         return
