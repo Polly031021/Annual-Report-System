@@ -709,11 +709,11 @@ def ai_find_pages(pdf_bytes, api_key, target_tables, base_url, model_name, compa
 # 以下为原有财险对标报告系统（第1~10段）—— 所有函数定义移至主逻辑之前
 # ==========================================
 # 0.添加公司边框和标题
-def add_company_borders(fig, companies, x_labels, top_margin=60, row=1, col=1):
+def add_company_borders(fig, companies, x_labels, top_margin=60, row=None, col=None):
     """
-    为指定的子图（或整个图）添加公司边框和标题。
-    注意：add_shape 不支持 row/col，所以形状会作用于整个图；
-    对于子图，需要另外处理形状定位（后续可扩展）。
+    为指定的图（或子图）添加公司边框和标题。
+    row 和 col 仅当 fig 是子图（由 make_subplots 创建）时才需要传递。
+    对于单图（非子图），请省略 row 和 col（或不传）。
     """
     # 确定每个公司在 x_labels 中的索引范围
     company_ranges = {}
@@ -737,15 +737,15 @@ def add_company_borders(fig, companies, x_labels, top_margin=60, row=1, col=1):
         # 添加矩形框（不传 row/col，默认作用域整个图）
         fig.add_shape(
             type="rect",
-            xref="x", yref="y",
+            xref="x", yref="paper",
             x0=x0, x1=x1,
             y0=0, y1=1,
             fillcolor="rgba(0,51,141,0.02)",
             line=dict(color="#00338D", width=1.5),
             layer="below"
         )
-        # 添加公司名称注释（支持 row/col）
-        fig.add_annotation(
+        # 添加公司名称注释
+        annotation_kwargs = dict(
             x=(start + end) / 2,
             y=1.02,
             text=f"<b>{co}</b>",
@@ -754,9 +754,13 @@ def add_company_borders(fig, companies, x_labels, top_margin=60, row=1, col=1):
             xanchor="center",
             yanchor="bottom",
             xref="x",
-            yref="paper",
-            row=row, col=col
+            yref="paper"
         )
+        # 如果传入了 row 和 col，则添加到注释中（仅当是子图时）
+        if row is not None and col is not None:
+            annotation_kwargs['row'] = row
+            annotation_kwargs['col'] = col
+        fig.add_annotation(**annotation_kwargs)
     fig.update_layout(margin=dict(t=top_margin))
     return fig
     
