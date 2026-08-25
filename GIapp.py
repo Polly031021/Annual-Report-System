@@ -716,24 +716,21 @@ def add_company_borders(fig, companies, x_labels, top_margin=60, row=None, col=N
     """
     # ===== 子图模式 =====
     if row is not None and col is not None:
-        # 每个子图只对应一家公司
         if len(companies) == 1:
             co = companies[0]
-            # 边框覆盖整个子图，y 方向延伸到 1.03
             fig.add_shape(
                 type="rect",
                 xref="paper", yref="paper",
                 x0=0, x1=1,
-                y0=0, y1=1.03,
+                y0=0, y1=1.0,          # 覆盖整个子图区域
                 fillcolor="rgba(200,200,200,0.05)",
                 line=dict(color="#CCCCCC", width=1.2),
                 layer="below",
                 row=row, col=col
             )
-            # 公司名称显示在子图顶部内部
             fig.add_annotation(
                 x=0.5,
-                y=0.99,
+                y=0.97,                 # 靠近子图顶部内部
                 text=f"<b>{co}</b>",
                 showarrow=False,
                 font=dict(size=12, color="#888888"),
@@ -1611,7 +1608,6 @@ def create_method_composition_chart(df, cos, year, divisor=1, unit_label="百万
     fig = make_subplots(
         rows=1, cols=num_companies,
         shared_yaxes=True,
-        subplot_titles=[co for co in cos],
         horizontal_spacing=0.02
     )
     
