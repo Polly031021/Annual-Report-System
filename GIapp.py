@@ -2271,7 +2271,7 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
     )
     return fig
 
-# 5.7 保险服务收入业务构成堆叠图（保费贡献）
+# 5.7 保险服务收入业务构成堆叠图（保费贡献） - 修复排序错误
 def create_premium_stacked_chart(df, cos, year, divisor=1, unit_label="百万元", highlight_co="无"):
     """
     绘制各公司保险服务收入业务构成堆叠图（按险种）
@@ -2315,7 +2315,6 @@ def create_premium_stacked_chart(df, cos, year, divisor=1, unit_label="百万元
     totals = df_plot[display_labels].sum(axis=1)
 
     # 定义颜色（使用 KPMG_COLORS，并确保视觉差异大）
-    # 从 KPMG_COLORS 中挑选 8 个差异明显的颜色（多于6个，以防备）
     custom_colors = [
         "#00338D",  # 深蓝
         "#510DBC",  # 深紫
@@ -2332,8 +2331,12 @@ def create_premium_stacked_chart(df, cos, year, divisor=1, unit_label="百万元
     fig = go.Figure()
 
     # 按总金额降序排列公司（使柱状图美观）
-    sorted_companies = df_plot.sort_values(display_labels.sum(axis=1), ascending=False)['公司'].tolist()
+    df_plot['total'] = totals
+    sorted_companies = df_plot.sort_values('total', ascending=False)['公司'].tolist()
     df_plot = df_plot.set_index('公司').reindex(sorted_companies).reset_index()
+    # 更新 totals 顺序以匹配
+    totals = df_plot['total']
+    df_plot = df_plot.drop(columns=['total'])
 
     for i, label in enumerate(display_labels):
         values = df_plot[label].fillna(0).tolist()
