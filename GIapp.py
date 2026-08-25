@@ -2148,11 +2148,11 @@ def create_profit_contribution_facet_chart(df, cos, year, divisor=1, unit_label=
 
     return fig
 
-# 5.6 综合赔付率拆解堆叠图（修复标签，优化配色）
+# 5.6 综合赔付率拆解堆叠图（自动提取年份，优化配色）
 def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=1, unit_label="百万元", highlight_co="无"):
     """
     绘制综合赔付率拆解的堆叠柱状图（各因子占保险服务收入比例）
-    横轴为公司，每个公司显示两个柱子（2024和2025）
+    自动从数据中提取最近两个年份，横轴为公司，每个公司显示两个柱子
     """
     factors = [
         "当期发生赔款及理赔费用",
@@ -2165,12 +2165,12 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
     
     # 调整配色：用淡蓝和灰色替代两个深色
     factor_colors = {
-        "当期发生赔款及理赔费用": "#00338D",      # 深蓝（保留）
-        "已发生赔款负债履约现金流变动": "#510DBC", # 深紫（保留）
-        "亏损合同损益": "#B0BEC5",               # 灰色（替换深色）
-        "承保财务损益": "#76D2FF",               # 淡蓝（替换深色）
-        "再保净成本": "#FD349C",                 # 粉红（保留）
-        "提取保费准备金": "#00C0AE"              # 青绿（保留）
+        "当期发生赔款及理赔费用": "#00338D",      # 深蓝
+        "已发生赔款负债履约现金流变动": "#510DBC", # 深紫
+        "亏损合同损益": "#B0BEC5",               # 灰色
+        "承保财务损益": "#76D2FF",               # 淡蓝
+        "再保净成本": "#FD349C",                 # 粉红
+        "提取保费准备金": "#00C0AE"              # 青绿
     }
     
     raw = df.copy()
@@ -2178,7 +2178,21 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
     raw['公司'] = raw['公司'].astype(str).str.strip()
     raw['字段名'] = raw['字段名'].astype(str).str.strip()
     
-    years = [str(prev_year), str(latest_year)]
+    # 从数据中提取实际存在的年份，排序后取最近两个
+    available_years = sorted(
+        [int(y) for y in raw['报告年份'].unique() if y.isdigit()],
+        reverse=True
+    )
+    if len(available_years) >= 2:
+        years = [str(available_years[1]), str(available_years[0])]  # [前一年, 最新年]
+        year_display = f"{available_years[1]}YE vs {available_years[0]}YE"
+    elif len(available_years) == 1:
+        years = [str(available_years[0]), str(available_years[0])]  # 只有一年则重复
+        year_display = f"{available_years[0]}YE"
+    else:
+        # 回退到传入的年份
+        years = [str(prev_year), str(latest_year)]
+        year_display = f"{prev_year}YE vs {latest_year}YE"
     
     # 计算各公司各年份的保险服务收入（分母）
     service_revenue = {}
@@ -2236,7 +2250,7 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
     
     fig.update_layout(
         barmode='relative',
-        title=f"综合赔付率拆解（{prev_year}YE vs {latest_year}YE）",
+        title=f"综合赔付率拆解（{year_display}）",
         xaxis_title="公司",
         yaxis_title="占保险服务收入比例（%）",
         legend=dict(
@@ -2256,7 +2270,6 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
         hovermode='x unified'
     )
     return fig
-
 
 # 6.汇总表
 def create_nonlife_summary_table(df, cos, highlight_co="无"):
