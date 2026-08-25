@@ -2271,6 +2271,284 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
     )
     return fig
 
+# 5.7 保险服务收入业务构成堆叠图（保费贡献）
+def create_premium_stacked_chart(df, cos, year, divisor=1, unit_label="百万元", highlight_co="无"):
+    """
+    绘制各公司保险服务收入业务构成堆叠图（按险种）
+    """
+    field_type = "保险服务收入"
+    prefix = f"{field_type}-"
+    all_fields = df['字段名'].unique()
+    business_fields = [f for f in all_fields if isinstance(f, str) and f.startswith(prefix)]
+    # 过滤掉 "合计" 字段
+    business_fields = [f for f in business_fields if not f.endswith("合计")]
+
+    if not business_fields:
+        fig = go.Figure()
+        fig.add_annotation(text=f"未找到{field_type}业务构成数据", x=0.5, y=0.5, showarrow=False, font=dict(size=16, color="red"))
+        fig.update_layout(height=400)
+        return fig
+
+    df_year = df[df['报告年份'].astype(str) == str(year)]
+    df_year = df_year[df_year['公司'].isin(cos)]
+
+    # 构建数据透视
+    pivot_data = []
+    for co in cos:
+        row = {'公司': co}
+        for f in business_fields:
+            val_series = df_year[(df_year['公司'] == co) & (df_year['字段名'] == f)]['(百万)人民币']
+            val = val_series.iloc[0] if not val_series.empty else 0
+            label = f.replace(prefix, "")
+            row[label] = val / divisor
+        pivot_data.append(row)
+    df_plot = pd.DataFrame(pivot_data)
+    display_labels = [c for c in df_plot.columns if c != '公司']
+
+    if not df_plot[display_labels].map(lambda x: x != 0).any().any():
+        fig = go.Figure()
+        fig.add_annotation(text="所有公司业务构成均为零或未披露", x=0.5, y=0.5, showarrow=False, font=dict(size=16, color="red"))
+        fig.update_layout(height=400)
+        return fig
+
+    # 计算每个公司的总金额（用于百分比）
+    totals = df_plot[display_labels].sum(axis=1)
+
+    # 定义颜色（使用 KPMG_COLORS，并确保视觉差异大）
+    # 从 KPMG_COLORS 中挑选 8 个差异明显的颜色（多于6个，以防备）
+    custom_colors = [
+        "#00338D",  # 深蓝
+        "#510DBC",  # 深紫
+        "#FD349C",  # 粉红
+        "#00C0AE",  # 青绿
+        "#FB8E7E",  # 橙红
+        "#7213EA",  # 紫
+        "#76D2FF",  # 淡蓝
+        "#B0BEC5",  # 灰色
+    ]
+    # 如果险种数超过8个，循环使用
+    colors = custom_colors * (len(display_labels)//len(custom_colors) + 1)
+
+    fig = go.Figure()
+
+    # 按总金额降序排列公司（使柱状图美观）
+    sorted_companies = df_plot.sort_values(display_labels.sum(axis=1), ascending=False)['公司'].tolist()
+    df_plot = df_plot.set_index('公司').reindex(sorted_companies).reset_index()
+
+    for i, label in enumerate(display_labels):
+        values = df_plot[label].fillna(0).tolist()
+        # 计算占比
+        ratios = []
+        for val, total in zip(values, totals):
+            if total != 0:
+                ratios.append(val / total * 100)
+            else:
+                ratios.append(0)
+        texts = []
+        for val, rat in zip(values, ratios):
+            if val == 0:
+                texts.append("")
+            else:
+                texts.append(f"{rat:.1f}%")
+        fig.add_trace(go.Bar(
+            name=label,
+            x=df_plot['公司'],
+            y=ratios,
+            marker_color=colors[i % len(colors)],
+            text=texts,
+            textposition='inside',
+            insidetextanchor='middle',
+            textfont=dict(size=10, color='white' if i % 2 == 0 else 'black'),
+            hovertemplate=f"{label}: %{{y:.1f}}%<extra>%{{x}}</extra>",
+            showlegend=True,
+            legendgroup=label,
+        ))
+
+    # 添加 y=0 基准线
+    fig.add_hline(y=0, line_dash="dash", line_color="gray", line_width=1, opacity=0.5)
+
+    # 高亮框（如果指定了highlight_co）
+    if highlight_co != "无" and highlight_co in df_plot['公司'].values:
+        idx = df_plot['公司'].tolist().index(highlight_co)
+        fig.add_shape(
+            type="rect",
+            xref="x", yref="y",
+            x0=idx - 0.45, x1=idx + 0.45,
+            y0=0, y1=1,
+            fillcolor="rgba(0,51,141,0.05)",
+            line=dict(color="rgba(0,51,141,0.8)", width=1.5),
+            layer="below"
+        )
+
+    fig.update_layout(
+        barmode='relative',
+        title=f"保险服务收入业务构成（{year}YE）",
+        xaxis_title="公司",
+        yaxis_title="占比（%）",
+        legend=dict(
+            orientation="v",
+            yanchor="middle",
+            y=0.5,
+            xanchor="right",
+            x=-0.15,
+            font=dict(size=11)
+        ),
+        height=550,
+        margin=dict(l=20, r=20, t=50, b=50),
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        bargap=0.15,
+        bargroupgap=0.1,
+        hovermode='x unified'
+    )
+    return fig
+
+# 5.8 承保利润业务构成堆叠图
+def create_profit_contribution_stacked_chart(df, cos, year, divisor=1, unit_label="百万元", highlight_co="无"):
+    """
+    绘制各公司承保利润业务构成堆叠图（按险种，显示占比）
+    支持正负值堆叠（正数向上，负数向下）
+    """
+    field_type = "承保利润"
+    prefix = f"{field_type}-"
+    all_fields = df['字段名'].unique()
+    business_fields = [f for f in all_fields if isinstance(f, str) and f.startswith(prefix)]
+    # 过滤掉 "合计" 字段
+    business_fields = [f for f in business_fields if not f.endswith("合计")]
+
+    if not business_fields:
+        fig = go.Figure()
+        fig.add_annotation(text=f"未找到{field_type}业务构成数据", x=0.5, y=0.5, showarrow=False, font=dict(size=16, color="red"))
+        fig.update_layout(height=400)
+        return fig
+
+    df_year = df[df['报告年份'].astype(str) == str(year)]
+    df_year = df_year[df_year['公司'].isin(cos)]
+
+    # 构建数据透视（金额已按 divisor 缩放）
+    pivot_data = []
+    for co in cos:
+        row = {'公司': co}
+        for f in business_fields:
+            val_series = df_year[(df_year['公司'] == co) & (df_year['字段名'] == f)]['(百万)人民币']
+            val = val_series.iloc[0] if not val_series.empty else 0
+            label = f.replace(prefix, "")
+            row[label] = val / divisor
+        pivot_data.append(row)
+    df_plot = pd.DataFrame(pivot_data)
+    display_labels = [c for c in df_plot.columns if c != '公司']
+
+    if not df_plot[display_labels].map(lambda x: x != 0).any().any():
+        fig = go.Figure()
+        fig.add_annotation(text="所有公司业务构成均为零或未披露", x=0.5, y=0.5, showarrow=False, font=dict(size=16, color="red"))
+        fig.update_layout(height=400)
+        return fig
+
+    # 计算每个公司的绝对值总和（用于归一化）
+    abs_sums = {}
+    for co in cos:
+        vals = [df_plot[df_plot['公司'] == co][label].iloc[0] for label in display_labels]
+        total = sum(abs(v) for v in vals)
+        abs_sums[co] = total if total != 0 else 1.0
+
+    # 归一化为百分比（保留符号）
+    for co in cos:
+        for label in display_labels:
+            val = df_plot[df_plot['公司'] == co][label].iloc[0]
+            pct = val / abs_sums[co] * 100
+            df_plot.loc[df_plot['公司'] == co, label] = pct
+
+    # 定义颜色（同综合赔付率拆解）
+    custom_colors = [
+        "#00338D",  # 深蓝
+        "#510DBC",  # 深紫
+        "#FD349C",  # 粉红
+        "#00C0AE",  # 青绿
+        "#FB8E7E",  # 橙红
+        "#7213EA",  # 紫
+        "#76D2FF",  # 淡蓝
+        "#B0BEC5",  # 灰色
+    ]
+    colors = custom_colors * (len(display_labels)//len(custom_colors) + 1)
+
+    # 按总绝对金额排序公司（使图表有序）
+    company_order = sorted(cos, key=lambda co: abs_sums.get(co, 0), reverse=True)
+    df_plot = df_plot.set_index('公司').reindex(company_order).reset_index()
+
+    fig = go.Figure()
+
+    # 记录每个公司的正负累计，用于定位标签
+    pos_cum = {co: 0 for co in company_order}
+    neg_cum = {co: 0 for co in company_order}
+
+    for i, label in enumerate(display_labels):
+        values = []
+        for co in company_order:
+            val = df_plot[df_plot['公司'] == co][label].iloc[0]
+            values.append(val)
+        # 计算标签位置（累计）
+        texts = []
+        for idx, co in enumerate(company_order):
+            val = values[idx]
+            if val == 0:
+                texts.append("")
+            else:
+                # 显示百分比
+                texts.append(f"{val:.1f}%")
+        # 添加 Bar trace（相对模式）
+        fig.add_trace(go.Bar(
+            name=label,
+            x=company_order,
+            y=values,
+            marker_color=colors[i % len(colors)],
+            text=texts,
+            textposition='inside',
+            insidetextanchor='middle',
+            textfont=dict(size=10, color='white' if i % 2 == 0 else 'black'),
+            hovertemplate=f"{label}: %{{y:.1f}}%<extra>%{{x}}</extra>",
+            showlegend=True,
+            legendgroup=label,
+        ))
+
+    # 添加 y=0 基准线
+    fig.add_hline(y=0, line_dash="dash", line_color="gray", line_width=1, opacity=0.5)
+
+    # 高亮框
+    if highlight_co != "无" and highlight_co in company_order:
+        idx = company_order.index(highlight_co)
+        fig.add_shape(
+            type="rect",
+            xref="x", yref="y",
+            x0=idx - 0.45, x1=idx + 0.45,
+            y0=-100, y1=100,
+            fillcolor="rgba(0,51,141,0.05)",
+            line=dict(color="rgba(0,51,141,0.8)", width=1.5),
+            layer="below"
+        )
+
+    fig.update_layout(
+        barmode='relative',
+        title=f"承保利润业务构成（{year}YE）",
+        xaxis_title="公司",
+        yaxis_title="占比（%）",
+        legend=dict(
+            orientation="v",
+            yanchor="middle",
+            y=0.5,
+            xanchor="right",
+            x=-0.15,
+            font=dict(size=11)
+        ),
+        height=550,
+        margin=dict(l=20, r=20, t=50, b=50),
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        bargap=0.15,
+        bargroupgap=0.1,
+        hovermode='x unified'
+    )
+    return fig
+
 # 6.汇总表
 def create_nonlife_summary_table(df, cos, highlight_co="无"):
     cy, py = latest_year, prev_year
@@ -3510,11 +3788,11 @@ def render_pure_chart_entity(m_id, print_mode):
         display_bottom_note(notes_dict.get(m_id, {}).get('note', ''))
         return
     # ==========================================
-    # 保险服务收入业务构成（饼图）
+    # 保险服务收入业务构成（堆叠图）
     # ==========================================
     if m_id == "premium_composition":
-        fig = create_business_composition_pie(
-            df_filtered, selected_cos, latest_year, divisor, unit_label, field_type="保险服务收入"
+        fig = create_premium_stacked_chart(
+            df_filtered, selected_cos, latest_year, divisor, unit_label, current_hl
         )
         show_chart(fig, print_mode, m_id)
         display_notes(m_id, df_filtered, "保险服务收入构成")
@@ -3522,11 +3800,11 @@ def render_pure_chart_entity(m_id, print_mode):
         return
 
     # ==========================================
-    # 承保利润业务构成（饼图）
+    # 承保利润业务构成（堆叠图）
     # ==========================================
     if m_id == "profit_composition":
-        fig = create_profit_contribution_facet_chart(
-            df_filtered, selected_cos, latest_year, divisor, unit_label
+        fig = create_profit_contribution_stacked_chart(
+            df_filtered, selected_cos, latest_year, divisor, unit_label, current_hl
         )
         show_chart(fig, print_mode, m_id)
         display_notes(m_id, df_filtered, "承保利润构成")
