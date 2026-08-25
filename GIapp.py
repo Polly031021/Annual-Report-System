@@ -1165,10 +1165,13 @@ def create_kpmg_multi_composition_chart(df, field_map, color_map, title_prefix, 
 def create_overview_table(df, cos, latest_year, prev_year, unit_label="百万元"):
     """
     生成概览表格：按保险服务收入排序，展示各公司关键指标同比变化（%）
-    返回 Plotly 表格
+    返回 Plotly 表格，表头单元格包含三行：指标名称、%变化、25YE/24YE-1
     """
-    # 提取所需指标
+    # 提取所需指标（内部字段名）
     metrics = ["总资产", "净资产", "保险服务收入", "承保利润", "净利润"]
+    # 对应的显示名称（将“承保利润”显示为“保险服务业绩”）
+    display_names = ["总资产", "净资产", "保险服务收入", "保险服务业绩", "净利润"]
+    
     # 获取最近两年数据
     df_latest = df[df['报告年份'].astype(str) == str(latest_year)]
     df_prev = df[df['报告年份'].astype(str) == str(prev_year)]
@@ -1206,10 +1209,15 @@ def create_overview_table(df, cos, latest_year, prev_year, unit_label="百万元
     for m in metrics:
         df_table[m] = df_table[m].apply(fmt_pct)
     
-    # 使用 Plotly 绘制表格（美观且支持导出）
+    # 构建表头：第一列"公司"不加额外文本，其他列显示三行
+    header_values = ['公司']
+    for display_name in display_names:
+        header_values.append(f"{display_name}<br>%变化<br>25YE/24YE-1")
+    
+    # 使用 Plotly 绘制表格
     fig = go.Figure(data=[go.Table(
         header=dict(
-            values=['公司'] + metrics,
+            values=header_values,
             fill_color='#00338D',
             align='center',
             font=dict(color='white', size=13)
@@ -1222,7 +1230,7 @@ def create_overview_table(df, cos, latest_year, prev_year, unit_label="百万元
         )
     )])
     fig.update_layout(
-        title=f"关键指标同比变化（%）",
+        title="关键指标同比变化（%）",
         margin=dict(l=10, r=10, t=50, b=10),
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)'
