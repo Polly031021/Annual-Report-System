@@ -1709,10 +1709,11 @@ def create_method_composition_chart(df, cos, year, divisor=1, unit_label="百万
     
     return fig
 
-#5.3 利润构成图
+# 5.3 利润构成图（含公司边框）
 def create_profit_composition_chart(df, cos, year, divisor=1, unit_label="百万元"):
     """
     绘制每家公司承保利润与投资利润的分组条形图（实际金额），并标注占比。
+    添加灰色公司边框，隐藏x轴公司名称。
     """
     field_uw = "承保利润"
     field_inv = "投资利润"
@@ -1753,15 +1754,12 @@ def create_profit_composition_chart(df, cos, year, divisor=1, unit_label="百万
             val_uw = val_uw.iloc[0] if not val_uw.empty else 0
             val_inv = df_year[(df_year['公司'] == co) & (df_year['报告年份'] == yr) & (df_year['字段名'] == actual_inv)]['(百万)人民币']
             val_inv = val_inv.iloc[0] if not val_inv.empty else 0
-            # ✅ 修正点：键名改为与后续 labels 一致
             raw_data[(co, yr)] = {"承保利润": val_uw / divisor, "投资利润": val_inv / divisor}
 
-    # 只取最新年份（year）的数据用于展示
     yr_str = str(year)
     companies = cos
     data = {co: raw_data.get((co, yr_str), {"承保利润": 0, "投资利润": 0}) for co in companies}
 
-    # 计算各公司总利润（代数和）和占比
     labels = ["承保利润", "投资利润"]
     colors = ["#00338D", "#0865EE"]
     fig = go.Figure()
@@ -1774,12 +1772,11 @@ def create_profit_composition_chart(df, cos, year, divisor=1, unit_label="百万
 
     y_max = max(all_vals) if all_vals else 1
     y_min = min(all_vals) if all_vals else 0
-    y_range = [min(0, y_min * 1.2), max(0, y_max * 1.3)]  # 留空间给标签
+    y_range = [min(0, y_min * 1.2), max(0, y_max * 1.3)]
 
     # 绘制分组条形
     for i, (label, color) in enumerate(zip(labels, colors)):
         values = [data[co][label] for co in companies]
-        # 计算占比（代数和 = 承保+投资）
         ratios = []
         for co in companies:
             total = data[co]["承保利润"] + data[co]["投资利润"]
@@ -1787,7 +1784,6 @@ def create_profit_composition_chart(df, cos, year, divisor=1, unit_label="百万
                 ratios.append(data[co][label] / total)
             else:
                 ratios.append(0)
-        # 标签文本：金额 + 占比
         texts = []
         for val, rat in zip(values, ratios):
             if val == 0:
@@ -1807,8 +1803,12 @@ def create_profit_composition_chart(df, cos, year, divisor=1, unit_label="百万
             cliponaxis=False
         ))
 
-    # 添加 y=0 基准线
     fig.add_hline(y=0, line_dash="dash", line_color="gray", line_width=1.5, opacity=0.7)
+
+    # ===== 🆕 添加灰色公司边框 =====
+    fig = add_company_borders(fig, companies, companies, top_margin=70)
+    # 隐藏 x 轴下方的公司名称（避免重复）
+    fig.update_xaxes(showticklabels=False)
 
     fig.update_layout(
         barmode='group',
@@ -1817,7 +1817,7 @@ def create_profit_composition_chart(df, cos, year, divisor=1, unit_label="百万
         yaxis_title=f"金额（{unit_label}）",
         yaxis=dict(range=y_range, tickformat=",.0f", zeroline=True, zerolinecolor='gray'),
         height=450,
-        margin=dict(t=50, b=60, l=40, r=20),
+        margin=dict(t=70, b=60, l=40, r=20),  # 顶部边距从 50 改为 70
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
