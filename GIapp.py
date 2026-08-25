@@ -907,18 +907,17 @@ def show_chart(fig, p_mode, m_id=None):
     if not fig:
         return
     if p_mode:
+        # 打印模式：自动适应宽度，通过 flex 居中
         fig.update_layout(
-            autosize=False,
-            width=900,
+            autosize=True,
             height=500,
             margin=dict(t=30, b=30, l=50, r=20)
         )
-        # 居中包装
-        st.markdown('<div style="display: flex; justify-content: center; margin: 0 auto;">', unsafe_allow_html=True)
-        st.plotly_chart(fig, use_container_width=False, config={"displayModeBar": False})
+        st.markdown('<div style="display: flex; justify-content: center; width: 100%;">', unsafe_allow_html=True)
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
         st.markdown('</div>', unsafe_allow_html=True)
     else:
-        # 非打印模式：保持原样（外层已有列包装）
+        # 非打印模式保持不变
         if m_id in ["claim_ratio_trend", "expense_ratio_trend"]:
             fig.update_layout(
                 autosize=False,
@@ -6412,7 +6411,7 @@ if st.session_state['user_role'] == "项目组成员":
                 fig.update_xaxes(showgrid=True if chart_type == "散点图" else False)
                 fig.update_yaxes(showgrid=True, gridcolor="#f0f0f0")
             
-                st.plotly_chart(fig, use_container_width=True)
+                show_chart(fig, print_mode, m_id)
                 with st.expander("📄 查看底层数据明细"):
                     st.dataframe(plot_df, use_container_width=True)
         
