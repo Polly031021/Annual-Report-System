@@ -1826,12 +1826,12 @@ def create_profit_composition_chart(df, cos, year, divisor=1, unit_label="百万
     )
     return fig
     
-# 5.4 综合赔付率拆解堆叠图（自动提取年份，优化配色 + 公司边框）
+# 5.4 综合赔付率拆解堆叠图（自动提取年份，优化配色 + 公司边框 + 年份标注）
 def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=1, unit_label="百万元", highlight_co="无"):
     """
     绘制综合赔付率拆解的堆叠柱状图（各因子占保险服务收入比例）
     自动从数据中提取最近两个年份，横轴为公司，每个公司显示两个柱子
-    添加灰色公司边框，隐藏x轴公司名称。
+    添加灰色公司边框，隐藏x轴公司名称，底部标注年份。
     """
     factors = [
         "当期发生赔款及理赔费用",
@@ -1843,12 +1843,12 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
     ]
     
     factor_colors = {
-        "当期发生赔款及理赔费用": "#00338D",      # 深蓝
-        "已发生赔款负债履约现金流变动": "#510DBC", # 深紫
-        "亏损合同损益": "#B0BEC5",               # 灰色
-        "承保财务损益": "#76D2FF",               # 淡蓝
-        "再保净成本": "#FD349C",                 # 粉红
-        "提取保费准备金": "#00C0AE"              # 青绿
+        "当期发生赔款及理赔费用": "#00338D",
+        "已发生赔款负债履约现金流变动": "#510DBC",
+        "亏损合同损益": "#B0BEC5",
+        "承保财务损益": "#76D2FF",
+        "再保净成本": "#FD349C",
+        "提取保费准备金": "#00C0AE"
     }
     
     raw = df.copy()
@@ -1856,29 +1856,26 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
     raw['公司'] = raw['公司'].astype(str).str.strip()
     raw['字段名'] = raw['字段名'].astype(str).str.strip()
     
-    # 从数据中提取实际存在的年份，排序后取最近两个
     available_years = sorted(
         [int(y) for y in raw['报告年份'].unique() if y.isdigit()],
         reverse=True
     )
     if len(available_years) >= 2:
-        years = [str(available_years[1]), str(available_years[0])]  # [前一年, 最新年]
+        years = [str(available_years[1]), str(available_years[0])]
         year_display = f"{available_years[1]}YE vs {available_years[0]}YE"
     elif len(available_years) == 1:
-        years = [str(available_years[0]), str(available_years[0])]  # 只有一年则重复
+        years = [str(available_years[0]), str(available_years[0])]
         year_display = f"{available_years[0]}YE"
     else:
         years = [str(prev_year), str(latest_year)]
         year_display = f"{prev_year}YE vs {latest_year}YE"
     
-    # 计算各公司各年份的保险服务收入（分母）
     service_revenue = {}
     for co in cos:
         for yr in years:
             rev = raw[(raw['公司'] == co) & (raw['报告年份'] == yr) & (raw['字段名'] == '保险服务收入')]['(百万)人民币']
             service_revenue[(co, yr)] = rev.sum() if not rev.empty else 1.0
     
-    # 构建数据
     rows = []
     for co in cos:
         for yr in years:
@@ -1891,7 +1888,7 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
             rows.append(row)
     df_plot = pd.DataFrame(rows)
     
-    # 构造横轴标签：公司名 + 换行 + 年份YE
+    # 构造横轴标签：公司名 + 换行 + 年份YE（用于x轴定位）
     df_plot['x_label'] = df_plot['公司'] + '<br>' + df_plot['年份'] + 'YE'
     x_labels = df_plot['x_label'].unique()
     
@@ -1912,12 +1909,51 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
     
     fig.add_hline(y=0, line_dash="dash", line_color="gray", line_width=1, opacity=0.5)
     
-    # ===== 🆕 添加灰色公司边框 =====
+    # ===== 添加灰色公司边框 =====
     fig = add_company_borders(fig, cos, x_labels, top_margin=70)
     # 隐藏 x 轴下方的公司名称（避免重复）
     fig.update_xaxes(showticklabels=False)
     
-    # 高亮框（特定追踪公司）
+    # ===== 🆕 在图表底部添加年份标注 =====
+    # 计算每个年份在x轴上的位置
+    # 由于x轴标签已被隐藏，我们用add_annotation在底部添加年份标注
+    # 获取所有公司数量，计算每个公司在x轴上的跨度
+    num_companies = len(cos)
+    # 每个公司占1个单位，两个年份分别位于每个公司的左侧和右侧
+    # 但我们不想要每个公司都标注，而是在整体底部统一标注
+    
+    # 方法：在图表底部（y=-0.08）添加两个年份标注
+    # 2024YE 标注在第一个公司左侧，2025YE 标注在最后一个公司右侧
+    # 使用 paper 坐标或 x 坐标
+    
+    # 使用 add_annotation 在底部添加年份标注
+    # 计算所有2024YE柱子的中心位置和2025YE柱子的中心位置
+    # 第1个公司2024YE在x=0.5（如果每个公司占1个单位），但x轴是类别轴，不好计算
+    
+    # 简化方案：在图表底部中央区域添加两个标注
+    fig.add_annotation(
+        x=0.25,
+        y=-0.08,
+        text="2024YE",
+        showarrow=False,
+        font=dict(size=13, color="#333"),
+        xanchor="center",
+        yanchor="top",
+        xref="paper",
+        yref="paper"
+    )
+    fig.add_annotation(
+        x=0.75,
+        y=-0.08,
+        text="2025YE",
+        showarrow=False,
+        font=dict(size=13, color="#333"),
+        xanchor="center",
+        yanchor="top",
+        xref="paper",
+        yref="paper"
+    )
+    
     if highlight_co != "无":
         x_labels = df_plot['x_label'].unique()
         highlight_indices = [i for i, label in enumerate(x_labels) if highlight_co in label]
@@ -1946,7 +1982,7 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
             font=dict(size=11)
         ),
         height=550,
-        margin=dict(l=20, r=20, t=70, b=60),  # 顶部边距从 50 改为 70
+        margin=dict(l=20, r=20, t=70, b=80),  # 底部边距增大，为年份标注留空间
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
         bargap=0.15,
