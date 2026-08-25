@@ -712,16 +712,13 @@ def ai_find_pages(pdf_bytes, api_key, target_tables, base_url, model_name, compa
 def add_company_borders(fig, companies, x_labels, top_margin=60, row=None, col=None):
     """
     为指定的图（或子图）添加公司边框和标题。
-    row 和 col 仅当 fig 是子图（由 make_subplots 创建）时才需要传递。
-    对于单图（非子图），请省略 row 和 col（或不传）。
+    颜色为灰色。
     """
-    # 确定每个公司在 x_labels 中的索引范围
     company_ranges = {}
     for co in companies:
         indices = [i for i, label in enumerate(x_labels) if co in label]
         if indices:
             company_ranges[co] = (min(indices), max(indices))
-    # 如果直接匹配（x_labels 就是公司名称）
     if not company_ranges:
         for co in companies:
             if co in x_labels:
@@ -734,29 +731,27 @@ def add_company_borders(fig, companies, x_labels, top_margin=60, row=None, col=N
         width_extend = 0.55 if (end - start) > 0 else 0.4
         x0 = start - width_extend
         x1 = end + width_extend
-        # 添加矩形框（不传 row/col，默认作用域整个图）
+        # 灰色边框，淡灰色背景
         fig.add_shape(
             type="rect",
             xref="x", yref="paper",
             x0=x0, x1=x1,
             y0=0, y1=1,
-            fillcolor="rgba(0,51,141,0.02)",
-            line=dict(color="#00338D", width=1.5),
+            fillcolor="rgba(200,200,200,0.05)",
+            line=dict(color="#CCCCCC", width=1.2),
             layer="below"
         )
-        # 添加公司名称注释
         annotation_kwargs = dict(
             x=(start + end) / 2,
             y=1.02,
             text=f"<b>{co}</b>",
             showarrow=False,
-            font=dict(size=12, color="#00338D"),
+            font=dict(size=12, color="#888888"),
             xanchor="center",
             yanchor="bottom",
             xref="x",
             yref="paper"
         )
-        # 如果传入了 row 和 col，则添加到注释中（仅当是子图时）
         if row is not None and col is not None:
             annotation_kwargs['row'] = row
             annotation_kwargs['col'] = col
@@ -1435,9 +1430,10 @@ def create_kpmg_chart(df, field_name, title_prefix, show_labels, pct_font_size, 
             layer="below"
         )
     
-    # ===== 🆕 添加公司边框 =====
-    # sorted_cos 既是公司列表，也是 x 轴标签（因为 x 轴直接使用公司名称）
+    # ===== 🆕 添加公司边框（灰色） =====
     fig = add_company_borders(fig, sorted_cos, sorted_cos, top_margin=70)
+    # 隐藏 x 轴下方的公司名称（因为边框上方已显示）
+    fig.update_xaxes(showticklabels=False)
 
     fig.update_layout(
         barmode='group',
