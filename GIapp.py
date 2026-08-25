@@ -712,7 +712,7 @@ def ai_find_pages(pdf_bytes, api_key, target_tables, base_url, model_name, compa
 def add_company_borders(fig, companies, x_labels, top_margin=60, row=None, col=None):
     """
     为指定的图（或子图）添加公司边框和标题。
-    标题放在框线内部最上方，灰色。
+    标题放在框线内部最上方，灰色，垂直居中于框线顶部。
     """
     company_ranges = {}
     for co in companies:
@@ -741,15 +741,15 @@ def add_company_borders(fig, companies, x_labels, top_margin=60, row=None, col=N
             line=dict(color="#CCCCCC", width=1.2),
             layer="below"
         )
-        # 公司名称：放在框线内部顶部（y=0.97）
+        # 公司名称：底部对齐在 y=1.01（框线顶部下方一点），居中对齐
         annotation_kwargs = dict(
             x=(start + end) / 2,
-            y=0.97,
+            y=1.01,
             text=f"<b>{co}</b>",
             showarrow=False,
             font=dict(size=12, color="#888888"),
             xanchor="center",
-            yanchor="top",       # 顶部对齐，让名称位于框线内部最上方
+            yanchor="bottom",       # 底部对齐，使名称位于框线内顶部
             xref="x",
             yref="paper"
         )
@@ -759,7 +759,7 @@ def add_company_borders(fig, companies, x_labels, top_margin=60, row=None, col=N
         fig.add_annotation(**annotation_kwargs)
     fig.update_layout(margin=dict(t=top_margin))
     return fig
-
+    
 # 1.全局颜色工具
 def get_color_map(all_cos):
     current_selection_key = tuple(sorted(all_cos))
@@ -1441,14 +1441,14 @@ def create_kpmg_chart(df, field_name, title_prefix, show_labels, pct_font_size, 
         bargroupgap=0.0,
         bargap=global_gap,
         legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
+            orientation="v",        # 改为垂直
+            yanchor="middle",
+            y=0.5,
             xanchor="right",
-            x=1.10,           # 图例向右移动，避免与框线重叠
+            x=-0.05,                # 图例紧贴图表左侧
             font=dict(size=12)
         ),
-        margin=dict(t=70, b=40, l=20, r=100),  # 右侧边距增大，为图例留空间
+        margin=dict(t=70, b=40, l=20, r=20),
         height=700
     )
     fig.update_xaxes(showgrid=False, zeroline=False, showline=False)
