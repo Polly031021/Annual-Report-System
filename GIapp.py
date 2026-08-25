@@ -712,7 +712,7 @@ def ai_find_pages(pdf_bytes, api_key, target_tables, base_url, model_name, compa
 def add_company_borders(fig, companies, x_labels, top_margin=60, row=None, col=None):
     """
     为指定的图（或子图）添加公司边框和标题。
-    颜色为灰色，框线宽度扩展至包裹柱子。
+    标题放在框线内部最上方，灰色。
     """
     company_ranges = {}
     for co in companies:
@@ -728,11 +728,10 @@ def add_company_borders(fig, companies, x_labels, top_margin=60, row=None, col=N
         return fig
 
     for co, (start, end) in company_ranges.items():
-        # 增大左右扩展宽度，确保框线包裹柱子和标签
         width_extend = 0.55 if (end - start) > 0 else 0.45
         x0 = start - width_extend
         x1 = end + width_extend
-        # 灰色边框，淡灰色背景，顶部延伸到 y=1.08 覆盖标签
+        # 框线：顶部延伸到 y=1.08 覆盖增长率标签
         fig.add_shape(
             type="rect",
             xref="x", yref="paper",
@@ -742,14 +741,15 @@ def add_company_borders(fig, companies, x_labels, top_margin=60, row=None, col=N
             line=dict(color="#CCCCCC", width=1.2),
             layer="below"
         )
+        # 公司名称：放在框线内部顶部（y=0.97）
         annotation_kwargs = dict(
             x=(start + end) / 2,
-            y=1.05,
+            y=0.97,
             text=f"<b>{co}</b>",
             showarrow=False,
             font=dict(size=12, color="#888888"),
             xanchor="center",
-            yanchor="bottom",
+            yanchor="top",       # 顶部对齐，让名称位于框线内部最上方
             xref="x",
             yref="paper"
         )
@@ -1445,10 +1445,10 @@ def create_kpmg_chart(df, field_name, title_prefix, show_labels, pct_font_size, 
             yanchor="bottom",
             y=1.02,
             xanchor="right",
-            x=1.08,           # 图例向右移动，避免与框线重叠
+            x=1.10,           # 图例向右移动，避免与框线重叠
             font=dict(size=12)
         ),
-        margin=dict(t=70, b=40, l=20, r=80),  # 右侧边距增大，为图例留空间
+        margin=dict(t=70, b=40, l=20, r=100),  # 右侧边距增大，为图例留空间
         height=700
     )
     fig.update_xaxes(showgrid=False, zeroline=False, showline=False)
