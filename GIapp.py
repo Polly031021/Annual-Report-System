@@ -3767,7 +3767,6 @@ def render_pure_chart_entity(m_id, print_mode):
         else:
             show_labels = st.session_state.get(f"lab_{m_id}", True)
         
-        # 调用重写后的 create_ratio_trend_chart（返回图表列表）
         figs = create_ratio_trend_chart(
             df_filtered, selected_cos,
             factor_list=[
@@ -3779,7 +3778,8 @@ def render_pure_chart_entity(m_id, print_mode):
             divisor=divisor,
             unit_label=unit_label,
             highlight_co=current_hl,
-            show_labels=show_labels
+            show_labels=show_labels,
+            ratio_first=True   # 综合图放在首位
         )
         
         # 逐个显示图表（每个因子一张图）
@@ -4618,8 +4618,9 @@ def create_ratio_trend_chart(df, cos, factor_list, ratio_field, title_prefix,
             s_ratio = raw[(raw['公司']==co) & (raw['报告年份']==yr) & (raw['字段名']==ratio_field)]['(百万)人民币']
             metric_data[ratio_field][co][yr] = s_ratio.iloc[0] if not s_ratio.empty else np.nan
 
-    # 颜色：使用 KPMG 官方色卡
-    company_colors = {co: KPMG_COLORS[i % len(KPMG_COLORS)] for i, co in enumerate(cos)}
+    # 颜色：使用自定义强对比色（从 KPMG 色板中精选）
+    custom_colors = ["#00338D", "#510DBC", "#FD349C", "#00C0AE", "#FB8E7E", "#7213EA"]
+    company_colors = {co: custom_colors[i % len(custom_colors)] for i, co in enumerate(cos)}
     marker_symbols = ['circle', 'square', 'diamond', 'triangle-up', 'star', 'pentagon', 'x', 'cross']
 
     figs = []
@@ -4680,14 +4681,14 @@ def create_ratio_trend_chart(df, cos, factor_list, ratio_field, title_prefix,
                 tickmode='array',
                 tickvals=years,
                 ticktext=years,
-                gridcolor='lightgray',
-                gridwidth=0.5,
+                gridcolor='rgba(0,0,0,0)',   # 去掉网格线
+                gridwidth=0,
             ),
             yaxis=dict(
                 tickformat=".2%",
                 range=[y_lower, y_upper],
-                gridcolor='lightgray',
-                gridwidth=0.5,
+                gridcolor='rgba(0,0,0,0)',   # 去掉网格线
+                gridwidth=0,
                 zeroline=True,
                 zerolinecolor='gray',
                 zerolinewidth=1,
