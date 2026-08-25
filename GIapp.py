@@ -1442,7 +1442,7 @@ def create_kpmg_chart(df, field_name, title_prefix, show_labels, pct_font_size, 
             yanchor="middle",
             y=0.5,
             xanchor="right",
-            x=-0.2,                # 图例紧贴图表左侧
+            x=-0.1,                # 图例紧贴图表左侧
             font=dict(size=12)
         ),
         margin=dict(t=70, b=40, l=20, r=20),
