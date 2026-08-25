@@ -2097,7 +2097,7 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
     )
     return fig
 
-# 5.7 保险服务收入业务构成堆叠图（保费贡献） - 修复排序错误 + 唯一颜色
+# 5.7 保险服务收入业务构成堆叠图（保费贡献） - 按全局公司顺序
 def create_premium_stacked_chart(df, cos, year, divisor=1, unit_label="百万元", highlight_co="无"):
     """
     绘制各公司保险服务收入业务构成堆叠图（按险种）
@@ -2106,7 +2106,6 @@ def create_premium_stacked_chart(df, cos, year, divisor=1, unit_label="百万元
     prefix = f"{field_type}-"
     all_fields = df['字段名'].unique()
     business_fields = [f for f in all_fields if isinstance(f, str) and f.startswith(prefix)]
-    # 过滤掉 "合计" 字段
     business_fields = [f for f in business_fields if not f.endswith("合计")]
 
     if not business_fields:
@@ -2137,38 +2136,29 @@ def create_premium_stacked_chart(df, cos, year, divisor=1, unit_label="百万元
         fig.update_layout(height=400)
         return fig
 
+    # 按传入的 cos 顺序确保 df_plot 的顺序
+    df_plot = df_plot.set_index('公司').reindex(cos).reset_index()
+
     # 计算每个公司的总金额（用于百分比）
     totals = df_plot[display_labels].sum(axis=1)
 
-    # ===== 🆕 唯一颜色分配 =====
+    # ===== 唯一颜色分配 =====
     import plotly.express as px
-    base_colors = KPMG_COLORS  # 12种
-    # 如果险种超过12种，从 Plotly 色板补充
+    base_colors = KPMG_COLORS
     if len(display_labels) > len(base_colors):
         extra_colors = px.colors.qualitative.Plotly
         extra_unique = [c for c in extra_colors if c not in base_colors]
         all_colors = base_colors + extra_unique
     else:
         all_colors = base_colors
-    # 如果仍然不够，用 Alphabet 补充
     if len(display_labels) > len(all_colors):
         all_colors = all_colors + px.colors.qualitative.Alphabet
-    # 为每个险种分配唯一颜色（按顺序）
     color_map = {label: all_colors[i % len(all_colors)] for i, label in enumerate(display_labels)}
 
     fig = go.Figure()
 
-    # 按总金额降序排列公司（使柱状图美观）
-    df_plot['total'] = totals
-    sorted_companies = df_plot.sort_values('total', ascending=False)['公司'].tolist()
-    df_plot = df_plot.set_index('公司').reindex(sorted_companies).reset_index()
-    # 更新 totals 顺序以匹配
-    totals = df_plot['total']
-    df_plot = df_plot.drop(columns=['total'])
-
     for i, label in enumerate(display_labels):
         values = df_plot[label].fillna(0).tolist()
-        # 计算占比
         ratios = []
         for val, total in zip(values, totals):
             if total != 0:
@@ -2195,10 +2185,8 @@ def create_premium_stacked_chart(df, cos, year, divisor=1, unit_label="百万元
             legendgroup=label,
         ))
 
-    # 添加 y=0 基准线
     fig.add_hline(y=0, line_dash="dash", line_color="gray", line_width=1, opacity=0.5)
 
-    # 高亮框（如果指定了highlight_co）
     if highlight_co != "无" and highlight_co in df_plot['公司'].values:
         idx = df_plot['公司'].tolist().index(highlight_co)
         fig.add_shape(
@@ -2234,7 +2222,7 @@ def create_premium_stacked_chart(df, cos, year, divisor=1, unit_label="百万元
     )
     return fig
 
-# 5.8 承保利润业务构成堆叠图 - 唯一颜色
+# 5.8 承保利润业务构成堆叠图 - 按全局公司顺序
 def create_profit_contribution_stacked_chart(df, cos, year, divisor=1, unit_label="百万元", highlight_co="无"):
     """
     绘制各公司承保利润业务构成堆叠图（按险种，显示占比）
@@ -2244,7 +2232,6 @@ def create_profit_contribution_stacked_chart(df, cos, year, divisor=1, unit_labe
     prefix = f"{field_type}-"
     all_fields = df['字段名'].unique()
     business_fields = [f for f in all_fields if isinstance(f, str) and f.startswith(prefix)]
-    # 过滤掉 "合计" 字段
     business_fields = [f for f in business_fields if not f.endswith("合计")]
 
     if not business_fields:
@@ -2256,7 +2243,6 @@ def create_profit_contribution_stacked_chart(df, cos, year, divisor=1, unit_labe
     df_year = df[df['报告年份'].astype(str) == str(year)]
     df_year = df_year[df_year['公司'].isin(cos)]
 
-    # 构建数据透视（金额已按 divisor 缩放）
     pivot_data = []
     for co in cos:
         row = {'公司': co}
@@ -2275,6 +2261,9 @@ def create_profit_contribution_stacked_chart(df, cos, year, divisor=1, unit_labe
         fig.update_layout(height=400)
         return fig
 
+    # 按传入的 cos 顺序确保 df_plot 的顺序
+    df_plot = df_plot.set_index('公司').reindex(cos).reset_index()
+
     # 计算每个公司的绝对值总和（用于归一化）
     abs_sums = {}
     for co in cos:
@@ -2289,7 +2278,7 @@ def create_profit_contribution_stacked_chart(df, cos, year, divisor=1, unit_labe
             pct = val / abs_sums[co] * 100
             df_plot.loc[df_plot['公司'] == co, label] = pct
 
-    # ===== 🆕 唯一颜色分配 =====
+    # ===== 唯一颜色分配 =====
     import plotly.express as px
     base_colors = KPMG_COLORS
     if len(display_labels) > len(base_colors):
@@ -2302,19 +2291,15 @@ def create_profit_contribution_stacked_chart(df, cos, year, divisor=1, unit_labe
         all_colors = all_colors + px.colors.qualitative.Alphabet
     color_map = {label: all_colors[i % len(all_colors)] for i, label in enumerate(display_labels)}
 
-    # 按总绝对金额排序公司（使图表有序）
-    company_order = sorted(cos, key=lambda co: abs_sums.get(co, 0), reverse=True)
-    df_plot = df_plot.set_index('公司').reindex(company_order).reset_index()
-
     fig = go.Figure()
 
     for i, label in enumerate(display_labels):
         values = []
-        for co in company_order:
+        for co in cos:
             val = df_plot[df_plot['公司'] == co][label].iloc[0]
             values.append(val)
         texts = []
-        for idx, co in enumerate(company_order):
+        for idx, co in enumerate(cos):
             val = values[idx]
             if val == 0:
                 texts.append("")
@@ -2322,7 +2307,7 @@ def create_profit_contribution_stacked_chart(df, cos, year, divisor=1, unit_labe
                 texts.append(f"{val:.1f}%")
         fig.add_trace(go.Bar(
             name=label,
-            x=company_order,
+            x=cos,
             y=values,
             marker_color=color_map[label],
             text=texts,
@@ -2334,12 +2319,10 @@ def create_profit_contribution_stacked_chart(df, cos, year, divisor=1, unit_labe
             legendgroup=label,
         ))
 
-    # 添加 y=0 基准线
     fig.add_hline(y=0, line_dash="dash", line_color="gray", line_width=1, opacity=0.5)
 
-    # 高亮框
-    if highlight_co != "无" and highlight_co in company_order:
-        idx = company_order.index(highlight_co)
+    if highlight_co != "无" and highlight_co in cos:
+        idx = cos.index(highlight_co)
         fig.add_shape(
             type="rect",
             xref="x", yref="y",
