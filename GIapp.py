@@ -2455,7 +2455,7 @@ def show_step_7_content():
         if use_default:
             try:
                 # 🔧 修改点：替换为财险注释表模板的 URL
-                df_notes = pd.read_excel("https://github.com/Polly031021/Annual-Report-System/raw/main/step7-%E8%B4%A2%E9%99%A9%E6%A0%87%E5%87%86%E6%B3%A8%E9%87%8A%E8%A1%A8_0806.xlsx")
+                df_notes = pd.read_excel("https://github.com/Polly031021/Annual-Report-System/raw/main/step7-%E8%B4%A2%E9%99%A9%E6%A0%87%E5%87%86%E6%B3%A8%E9%87%8A%E8%A1%A8_0824.xlsx")
                 st.success("✅ 内置默认注释表加载成功")
             except Exception as e:
                 st.error(f"❌ 加载失败：{e}")
