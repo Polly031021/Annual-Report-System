@@ -710,6 +710,10 @@ def ai_find_pages(pdf_bytes, api_key, target_tables, base_url, model_name, compa
 # ==========================================
 # 0.添加公司边框和标题
 def add_company_borders(fig, companies, x_labels, top_margin=60, row=None, col=None):
+    """
+    为指定的图（或子图）添加公司边框和标题。
+    标题放在框线内部，靠近顶部，灰色。
+    """
     company_ranges = {}
     for co in companies:
         indices = [i for i, label in enumerate(x_labels) if co in label]
@@ -727,7 +731,7 @@ def add_company_borders(fig, companies, x_labels, top_margin=60, row=None, col=N
         width_extend = 0.55 if (end - start) > 0 else 0.45
         x0 = start - width_extend
         x1 = end + width_extend
-        # 框线顶部降低到 1.03，避免被截断或遮挡图例
+        # 框线顶部延伸到 1.03
         fig.add_shape(
             type="rect",
             xref="x", yref="paper",
@@ -737,10 +741,10 @@ def add_company_borders(fig, companies, x_labels, top_margin=60, row=None, col=N
             line=dict(color="#CCCCCC", width=1.2),
             layer="below"
         )
-        # 公司名称放在框线内部顶端（y=1.0，底部对齐）
+        # 公司名称：底部对齐在 y=1.01，靠近框线顶部但不压线
         annotation_kwargs = dict(
             x=(start + end) / 2,
-            y=1.0,
+            y=1.01,                     # 从 1.0 调整为 1.01，更靠近框线
             text=f"<b>{co}</b>",
             showarrow=False,
             font=dict(size=12, color="#888888"),
