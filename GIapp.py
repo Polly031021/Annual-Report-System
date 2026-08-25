@@ -718,19 +718,21 @@ def add_company_borders(fig, companies, x_labels, top_margin=60, row=None, col=N
     if row is not None and col is not None:
         if len(companies) == 1:
             co = companies[0]
+            # 框线覆盖整个子图区域，并向上延伸到标题上方
             fig.add_shape(
                 type="rect",
                 xref="paper", yref="paper",
                 x0=0, x1=1,
-                y0=0, y1=1.0,          # 覆盖整个子图区域
+                y0=0, y1=1.08,           # 向上延伸，包裹子图标题区域
                 fillcolor="rgba(200,200,200,0.05)",
                 line=dict(color="#CCCCCC", width=1.2),
                 layer="below",
                 row=row, col=col
             )
+            # 公司名称放在框线内部顶部（y=1.02，靠近框线顶部但不压线）
             fig.add_annotation(
                 x=0.5,
-                y=0.97,                 # 靠近子图顶部内部
+                y=1.02,
                 text=f"<b>{co}</b>",
                 showarrow=False,
                 font=dict(size=12, color="#888888"),
@@ -2095,7 +2097,7 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
     )
     return fig
 
-# 5.7 保险服务收入业务构成堆叠图（保费贡献） - 修复排序错误
+# 5.7 保险服务收入业务构成堆叠图（保费贡献） - 修复排序错误 + 唯一颜色
 def create_premium_stacked_chart(df, cos, year, divisor=1, unit_label="百万元", highlight_co="无"):
     """
     绘制各公司保险服务收入业务构成堆叠图（按险种）
@@ -2138,19 +2140,21 @@ def create_premium_stacked_chart(df, cos, year, divisor=1, unit_label="百万元
     # 计算每个公司的总金额（用于百分比）
     totals = df_plot[display_labels].sum(axis=1)
 
-    # 定义颜色（使用 KPMG_COLORS，并确保视觉差异大）
-    custom_colors = [
-        "#00338D",  # 深蓝
-        "#510DBC",  # 深紫
-        "#FD349C",  # 粉红
-        "#00C0AE",  # 青绿
-        "#FB8E7E",  # 橙红
-        "#7213EA",  # 紫
-        "#76D2FF",  # 淡蓝
-        "#B0BEC5",  # 灰色
-    ]
-    # 如果险种数超过8个，循环使用
-    colors = custom_colors * (len(display_labels)//len(custom_colors) + 1)
+    # ===== 🆕 唯一颜色分配 =====
+    import plotly.express as px
+    base_colors = KPMG_COLORS  # 12种
+    # 如果险种超过12种，从 Plotly 色板补充
+    if len(display_labels) > len(base_colors):
+        extra_colors = px.colors.qualitative.Plotly
+        extra_unique = [c for c in extra_colors if c not in base_colors]
+        all_colors = base_colors + extra_unique
+    else:
+        all_colors = base_colors
+    # 如果仍然不够，用 Alphabet 补充
+    if len(display_labels) > len(all_colors):
+        all_colors = all_colors + px.colors.qualitative.Alphabet
+    # 为每个险种分配唯一颜色（按顺序）
+    color_map = {label: all_colors[i % len(all_colors)] for i, label in enumerate(display_labels)}
 
     fig = go.Figure()
 
@@ -2181,7 +2185,7 @@ def create_premium_stacked_chart(df, cos, year, divisor=1, unit_label="百万元
             name=label,
             x=df_plot['公司'],
             y=ratios,
-            marker_color=colors[i % len(colors)],
+            marker_color=color_map[label],
             text=texts,
             textposition='inside',
             insidetextanchor='middle',
@@ -2230,7 +2234,7 @@ def create_premium_stacked_chart(df, cos, year, divisor=1, unit_label="百万元
     )
     return fig
 
-# 5.8 承保利润业务构成堆叠图
+# 5.8 承保利润业务构成堆叠图 - 唯一颜色
 def create_profit_contribution_stacked_chart(df, cos, year, divisor=1, unit_label="百万元", highlight_co="无"):
     """
     绘制各公司承保利润业务构成堆叠图（按险种，显示占比）
@@ -2285,18 +2289,18 @@ def create_profit_contribution_stacked_chart(df, cos, year, divisor=1, unit_labe
             pct = val / abs_sums[co] * 100
             df_plot.loc[df_plot['公司'] == co, label] = pct
 
-    # 定义颜色（同综合赔付率拆解）
-    custom_colors = [
-        "#00338D",  # 深蓝
-        "#510DBC",  # 深紫
-        "#FD349C",  # 粉红
-        "#00C0AE",  # 青绿
-        "#FB8E7E",  # 橙红
-        "#7213EA",  # 紫
-        "#76D2FF",  # 淡蓝
-        "#B0BEC5",  # 灰色
-    ]
-    colors = custom_colors * (len(display_labels)//len(custom_colors) + 1)
+    # ===== 🆕 唯一颜色分配 =====
+    import plotly.express as px
+    base_colors = KPMG_COLORS
+    if len(display_labels) > len(base_colors):
+        extra_colors = px.colors.qualitative.Plotly
+        extra_unique = [c for c in extra_colors if c not in base_colors]
+        all_colors = base_colors + extra_unique
+    else:
+        all_colors = base_colors
+    if len(display_labels) > len(all_colors):
+        all_colors = all_colors + px.colors.qualitative.Alphabet
+    color_map = {label: all_colors[i % len(all_colors)] for i, label in enumerate(display_labels)}
 
     # 按总绝对金额排序公司（使图表有序）
     company_order = sorted(cos, key=lambda co: abs_sums.get(co, 0), reverse=True)
@@ -2304,30 +2308,23 @@ def create_profit_contribution_stacked_chart(df, cos, year, divisor=1, unit_labe
 
     fig = go.Figure()
 
-    # 记录每个公司的正负累计，用于定位标签
-    pos_cum = {co: 0 for co in company_order}
-    neg_cum = {co: 0 for co in company_order}
-
     for i, label in enumerate(display_labels):
         values = []
         for co in company_order:
             val = df_plot[df_plot['公司'] == co][label].iloc[0]
             values.append(val)
-        # 计算标签位置（累计）
         texts = []
         for idx, co in enumerate(company_order):
             val = values[idx]
             if val == 0:
                 texts.append("")
             else:
-                # 显示百分比
                 texts.append(f"{val:.1f}%")
-        # 添加 Bar trace（相对模式）
         fig.add_trace(go.Bar(
             name=label,
             x=company_order,
             y=values,
-            marker_color=colors[i % len(colors)],
+            marker_color=color_map[label],
             text=texts,
             textposition='inside',
             insidetextanchor='middle',
