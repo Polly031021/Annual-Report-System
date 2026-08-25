@@ -732,7 +732,7 @@ def add_company_borders(fig, companies, x_labels, top_margin=60, row=None, col=N
             # 公司名称放在子图顶部内部（y=0.98）
             fig.add_annotation(
                 x=0.5,
-                y=0.98,
+                y=0.95,
                 text=f"<b>{co}</b>",
                 showarrow=False,
                 font=dict(size=12, color="#888888"),
