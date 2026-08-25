@@ -1915,9 +1915,10 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
     fig.update_xaxes(showticklabels=False)
     
     # ===== 🆕 在图表底部添加年份标注 =====
+    # 标注位置调整到 y=-0.12，在图表底部下方
     fig.add_annotation(
-        x=0.20,
-        y=-0.08,
+        x=0.25,
+        y=-0.12,
         text="2024YE",
         showarrow=False,
         font=dict(size=13, color="#333"),
@@ -1927,8 +1928,8 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
         yref="paper"
     )
     fig.add_annotation(
-        x=0.80,
-        y=-0.08,
+        x=0.75,
+        y=-0.12,
         text="2025YE",
         showarrow=False,
         font=dict(size=13, color="#333"),
@@ -1967,7 +1968,7 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
             font=dict(size=11)
         ),
         height=550,
-        margin=dict(l=20, r=20, t=70, b=100),  # 底部边距增大到100
+        margin=dict(l=20, r=20, t=70, b=130),  # 底部边距增大到130
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
         bargap=0.15,
