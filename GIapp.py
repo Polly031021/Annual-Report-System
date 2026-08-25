@@ -1825,160 +1825,13 @@ def create_profit_composition_chart(df, cos, year, divisor=1, unit_label="百万
         bargroupgap=0.1,
     )
     return fig
-
-#5.5 保险利润贡献图
-def create_profit_contribution_facet_chart(df, cos, year, divisor=1, unit_label="百万元"):
-    """
-    绘制每个公司的保险利润贡献（水平条形图），按险种贡献从大到小排列，显示金额和占比。
-    所有子图纵轴标签统一左对齐，并优化标签显示。
-    """
-    prefix = "承保利润-"
-    all_fields = df['字段名'].unique()
-    business_fields = [f for f in all_fields if isinstance(f, str) and f.startswith(prefix)]
-    business_fields = [f for f in business_fields if not f.endswith("合计")]
-
-    if not business_fields:
-        fig = go.Figure()
-        fig.add_annotation(text="未找到承保利润业务构成数据", x=0.5, y=0.5, showarrow=False, font=dict(size=16, color="red"))
-        fig.update_layout(height=400)
-        return fig
-
-    df_year = df[df['报告年份'].astype(str) == str(year)]
-    df_year = df_year[df_year['公司'].isin(cos)]
-
-    # 构建数据透视
-    pivot_data = []
-    for co in cos:
-        row = {'公司': co}
-        for f in business_fields:
-            val_series = df_year[(df_year['公司'] == co) & (df_year['字段名'] == f)]['(百万)人民币']
-            val = val_series.iloc[0] if not val_series.empty else 0
-            label = f.replace(prefix, "")
-            row[label] = val / divisor
-        pivot_data.append(row)
-    df_plot = pd.DataFrame(pivot_data)
-    display_labels = [c for c in df_plot.columns if c != '公司']
-
-    # 筛选有效险种
-    valid_labels = []
-    for label in display_labels:
-        if (df_plot[label] != 0).any():
-            valid_labels.append(label)
-    if not valid_labels:
-        fig = go.Figure()
-        fig.add_annotation(text="所有公司业务构成均为零", x=0.5, y=0.5, showarrow=False)
-        fig.update_layout(height=400)
-        return fig
-
-    # 按总金额排序险种（用于颜色一致性）
-    total_by_label = {label: df_plot[label].abs().sum() for label in valid_labels}
-    valid_labels_sorted = sorted(valid_labels, key=lambda x: total_by_label[x], reverse=True)
-
-    num_companies = len(cos)
-    col_width_ratio = 1.0 / num_companies if num_companies > 0 else 1.0
-
-    fig = make_subplots(
-        rows=1, cols=num_companies,
-        shared_yaxes=False,
-        subplot_titles=[f"<b>{co}</b>" for co in cos],
-        horizontal_spacing=0.06,
-        column_widths=[col_width_ratio] * num_companies
-    )
-
-    colors = KPMG_COLORS
-
-    # 先计算各公司险种数量，用于动态高度
-    max_items = 0
-    company_items = {}
-    for co in cos:
-        items = []
-        for label in valid_labels_sorted:
-            val = df_plot[df_plot['公司'] == co][label].iloc[0] if not df_plot[df_plot['公司'] == co].empty else 0
-            if val != 0:
-                items.append((label, val))
-        # 降序排列：贡献大的在上方
-        items.sort(key=lambda x: x[1], reverse=True)
-        company_items[co] = items
-        max_items = max(max_items, len(items))
-
-    chart_height = max(450, max_items * 40 + 80)
-
-    for col_idx, co in enumerate(cos):
-        items = company_items.get(co, [])
-        if not items:
-            continue
-        labels_plot = [item[0] for item in items]
-        values = [item[1] for item in items]
-
-        total_abs = sum(abs(v) for v in values)
-        if total_abs == 0:
-            continue
-
-        # 为了确保排序正确，打印调试信息（可删除）
-        print(f"公司 {co} 的险种顺序（降序）：{labels_plot}")
-
-        for i, (label, val) in enumerate(zip(labels_plot, values)):
-            ratio = val / total_abs
-            color_idx = valid_labels_sorted.index(label) % len(colors)
-            # 标签：金额 + 百分比，保留一位小数
-            label_text = f"{val:.1f} ({ratio:.1%})"
-
-            fig.add_trace(go.Bar(
-                y=[label],
-                x=[val],
-                name=label,
-                marker_color=colors[color_idx % len(colors)],
-                orientation='h',
-                text=[label_text],
-                textposition='outside',
-                textfont=dict(size=9, color="#333"),
-                width=0.6,
-                showlegend=False,
-                hoverinfo='x+y+name'
-            ), row=1, col=col_idx+1)
-
-        # 添加 y=0 基准线
-        fig.add_vline(x=0, line_dash="dash", line_color="gray", line_width=1.2, opacity=0.6, row=1, col=col_idx+1)
-
-        # 强制设置 y 轴类别顺序（从上到下）
-        fig.update_yaxes(
-            categoryorder='array',
-            categoryarray=labels_plot,   # 注意：array 顺序即为显示顺序（从上到下）
-            row=1, col=col_idx+1
-        )
-
-    # 统一布局：增加右侧边距以容纳标签，左侧为纵轴标签留空间
-    fig.update_layout(
-        height=chart_height,
-        margin=dict(t=50, b=40, l=140, r=100),  # 右侧边距加大
-        showlegend=False,
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        bargap=0.15,
-        bargroupgap=0.1,
-    )
-
-    # 更新每个子图的轴
-    for i in range(1, num_companies + 1):
-        fig.update_xaxes(
-            title_text=f"金额（{unit_label}）" if i == 1 else "",
-            tickfont=dict(size=10),
-            row=1, col=i
-        )
-        fig.update_yaxes(
-            showticklabels=True,
-            tickfont=dict(size=11, color="#00338D"),
-            automargin=False,
-            row=1, col=i
-        )
-
-    return fig
-
-# 5.6 综合赔付率拆解堆叠图（自动提取年份，优化配色）
+    
+# 5.4 综合赔付率拆解堆叠图（自动提取年份，优化配色 + 公司边框）
 def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=1, unit_label="百万元", highlight_co="无"):
     """
     绘制综合赔付率拆解的堆叠柱状图（各因子占保险服务收入比例）
     自动从数据中提取最近两个年份，横轴为公司，每个公司显示两个柱子
+    添加灰色公司边框，隐藏x轴公司名称。
     """
     factors = [
         "当期发生赔款及理赔费用",
@@ -1989,7 +1842,6 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
         "提取保费准备金"
     ]
     
-    # 调整配色：用淡蓝和灰色替代两个深色
     factor_colors = {
         "当期发生赔款及理赔费用": "#00338D",      # 深蓝
         "已发生赔款负债履约现金流变动": "#510DBC", # 深紫
@@ -2016,7 +1868,6 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
         years = [str(available_years[0]), str(available_years[0])]  # 只有一年则重复
         year_display = f"{available_years[0]}YE"
     else:
-        # 回退到传入的年份
         years = [str(prev_year), str(latest_year)]
         year_display = f"{prev_year}YE vs {latest_year}YE"
     
@@ -2042,6 +1893,7 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
     
     # 构造横轴标签：公司名 + 换行 + 年份YE
     df_plot['x_label'] = df_plot['公司'] + '<br>' + df_plot['年份'] + 'YE'
+    x_labels = df_plot['x_label'].unique()
     
     fig = go.Figure()
     for f in factors:
@@ -2060,6 +1912,12 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
     
     fig.add_hline(y=0, line_dash="dash", line_color="gray", line_width=1, opacity=0.5)
     
+    # ===== 🆕 添加灰色公司边框 =====
+    fig = add_company_borders(fig, cos, x_labels, top_margin=70)
+    # 隐藏 x 轴下方的公司名称（避免重复）
+    fig.update_xaxes(showticklabels=False)
+    
+    # 高亮框（特定追踪公司）
     if highlight_co != "无":
         x_labels = df_plot['x_label'].unique()
         highlight_indices = [i for i, label in enumerate(x_labels) if highlight_co in label]
@@ -2088,7 +1946,7 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
             font=dict(size=11)
         ),
         height=550,
-        margin=dict(l=20, r=20, t=50, b=60),
+        margin=dict(l=20, r=20, t=70, b=60),  # 顶部边距从 50 改为 70
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
         bargap=0.15,
