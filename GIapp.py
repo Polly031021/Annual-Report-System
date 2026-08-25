@@ -2148,10 +2148,11 @@ def create_profit_contribution_facet_chart(df, cos, year, divisor=1, unit_label=
 
     return fig
 
-# 5.6 综合赔付率拆解堆叠图（新增）
-def create_cor_breakdown_stacked_chart(df, cos, year, divisor=1, unit_label="百万元", highlight_co="无"):
+# 5.6 综合赔付率拆解堆叠图（支持两年对比，优化配色）
+def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=1, unit_label="百万元", highlight_co="无"):
     """
     绘制综合赔付率拆解的堆叠柱状图（各因子占保险服务收入比例）
+    横轴为公司，每个公司显示两个柱子（2024和2025）
     """
     factors = [
         "当期发生赔款及理赔费用",
@@ -2161,68 +2162,79 @@ def create_cor_breakdown_stacked_chart(df, cos, year, divisor=1, unit_label="百
         "再保净成本",
         "提取保费准备金"
     ]
-    colors = KPMG_COLORS[:len(factors)]  # 使用KPMG色板
+    
+    # 从 KPMG_COLORS 中挑选 6 个视觉差异明显的颜色
+    factor_colors = {
+        "当期发生赔款及理赔费用": KPMG_COLORS[0],   # #00338D 深蓝
+        "已发生赔款负债履约现金流变动": KPMG_COLORS[5],  # #510DBC 深紫
+        "亏损合同损益": KPMG_COLORS[9],   # #FD349C 粉红
+        "承保财务损益": KPMG_COLORS[11],  # #00C0AE 青绿
+        "再保净成本": KPMG_COLORS[10],   # #FB8E7E 橙红
+        "提取保费准备金": KPMG_COLORS[7]  # #7213EA 紫
+    }
     
     raw = df.copy()
     raw['报告年份'] = raw['报告年份'].astype(str).str.replace('.0', '', regex=False)
     raw['公司'] = raw['公司'].astype(str).str.strip()
     raw['字段名'] = raw['字段名'].astype(str).str.strip()
     
-    # 只取最新年份
-    df_year = raw[raw['报告年份'] == str(year)]
+    years = [str(prev_year), str(latest_year)]
     
-    # 计算各公司保险服务收入（分母）
+    # 计算各公司各年份的保险服务收入（分母）
     service_revenue = {}
     for co in cos:
-        rev = df_year[(df_year['公司'] == co) & (df_year['字段名'] == '保险服务收入')]['(百万)人民币']
-        service_revenue[co] = rev.sum() if not rev.empty else 1.0  # 避免除以0
+        for yr in years:
+            rev = raw[(raw['公司'] == co) & (raw['报告年份'] == yr) & (raw['字段名'] == '保险服务收入')]['(百万)人民币']
+            service_revenue[(co, yr)] = rev.sum() if not rev.empty else 1.0
     
     # 构建数据
-    data = []
+    df_plot = pd.DataFrame()
     for co in cos:
-        row = {'公司': co}
-        for f in factors:
-            val = df_year[(df_year['公司'] == co) & (df_year['字段名'] == f)]['(百万)人民币']
-            val_sum = val.sum() if not val.empty else 0
-            ratio = val_sum / service_revenue[co] * 100  # 百分比
-            row[f] = ratio
-        data.append(row)
-    df_plot = pd.DataFrame(data)
+        for yr in years:
+            row = {'公司': co, '年份': yr}
+            for f in factors:
+                val = raw[(raw['公司'] == co) & (raw['报告年份'] == yr) & (raw['字段名'] == f)]['(百万)人民币']
+                val_sum = val.sum() if not val.empty else 0
+                ratio = val_sum / service_revenue[(co, yr)] * 100
+                row[f] = ratio
+            df_plot = pd.concat([df_plot, pd.DataFrame([row])], ignore_index=True)
     
-    # 创建堆叠图
+    df_plot['x_label'] = df_plot['公司'] + '<br>' + df_plot['年份'] + 'YE'
+    
     fig = go.Figure()
     for i, f in enumerate(factors):
         fig.add_trace(go.Bar(
-            x=df_plot['公司'],
+            x=df_plot['x_label'],
             y=df_plot[f],
             name=f,
-            marker_color=colors[i % len(colors)],
+            marker_color=factor_colors[f],
+            legendgroup=f,
             text=[f"{v:.1f}%" if abs(v) > 0.5 else "" for v in df_plot[f]],
             textposition='inside',
             insidetextanchor='middle',
-            textfont=dict(size=10, color='white'),
+            textfont=dict(size=9, color='white'),
             hovertemplate=f"{f}: %{{y:.1f}}%<extra>%{{x}}</extra>"
         ))
     
-    # 添加0线
     fig.add_hline(y=0, line_dash="dash", line_color="gray", line_width=1, opacity=0.5)
     
-    # 高亮框（如果指定了highlight_co）
-    if highlight_co != "无" and highlight_co in df_plot['公司'].values:
-        idx = df_plot['公司'].tolist().index(highlight_co)
-        fig.add_shape(
-            type="rect",
-            xref="x", yref="y",
-            x0=idx - 0.45, x1=idx + 0.45,
-            y0=0, y1=1,
-            fillcolor="rgba(0,51,141,0.05)",
-            line=dict(color="rgba(0,51,141,0.8)", width=1.5),
-            layer="below"
-        )
+    if highlight_co != "无":
+        x_labels = df_plot['x_label'].unique()
+        highlight_indices = [i for i, label in enumerate(x_labels) if highlight_co in label]
+        for idx in highlight_indices:
+            fig.add_shape(
+                type="rect",
+                xref="x", yref="y",
+                x0=idx - 0.48, x1=idx + 0.48,
+                y0=0, y1=1,
+                fillcolor="rgba(0,51,141,0.05)",
+                line=dict(color="rgba(0,51,141,0.8)", width=1.5),
+                layer="below"
+            )
     
     fig.update_layout(
-        barmode='relative',  # 堆叠
-        title=f"综合赔付率拆解（{year}YE）",
+        barmode='relative',
+        title=f"综合赔付率拆解（{prev_year}YE vs {latest_year}YE）",
         xaxis_title="公司",
         yaxis_title="占保险服务收入比例（%）",
         legend=dict(
@@ -2230,11 +2242,11 @@ def create_cor_breakdown_stacked_chart(df, cos, year, divisor=1, unit_label="百
             yanchor="middle",
             y=0.5,
             xanchor="right",
-            x=-0.15,  # 图例放在图表左侧
+            x=-0.15,
             font=dict(size=11)
         ),
-        height=500,
-        margin=dict(l=20, r=20, t=50, b=50),  # 左侧边距保持较小，图例会溢出
+        height=550,
+        margin=dict(l=20, r=20, t=50, b=60),
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
         bargap=0.15,
@@ -2242,6 +2254,7 @@ def create_cor_breakdown_stacked_chart(df, cos, year, divisor=1, unit_label="百
         hovermode='x unified'
     )
     return fig
+
 
 # 6.汇总表
 def create_nonlife_summary_table(df, cos, highlight_co="无"):
