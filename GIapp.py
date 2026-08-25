@@ -712,7 +712,7 @@ def ai_find_pages(pdf_bytes, api_key, target_tables, base_url, model_name, compa
 def add_company_borders(fig, companies, x_labels, top_margin=60, row=None, col=None):
     """
     为指定的图（或子图）添加公司边框和标题。
-    颜色为灰色。
+    颜色为灰色，框线宽度扩展至包裹柱子。
     """
     company_ranges = {}
     for co in companies:
@@ -728,22 +728,23 @@ def add_company_borders(fig, companies, x_labels, top_margin=60, row=None, col=N
         return fig
 
     for co, (start, end) in company_ranges.items():
-        width_extend = 0.55 if (end - start) > 0 else 0.4
+        # 增大左右扩展宽度，确保框线包裹柱子和标签
+        width_extend = 0.55 if (end - start) > 0 else 0.45
         x0 = start - width_extend
         x1 = end + width_extend
-        # 灰色边框，淡灰色背景
+        # 灰色边框，淡灰色背景，顶部延伸到 y=1.08 覆盖标签
         fig.add_shape(
             type="rect",
             xref="x", yref="paper",
             x0=x0, x1=x1,
-            y0=0, y1=1,
+            y0=0, y1=1.08,
             fillcolor="rgba(200,200,200,0.05)",
             line=dict(color="#CCCCCC", width=1.2),
             layer="below"
         )
         annotation_kwargs = dict(
             x=(start + end) / 2,
-            y=1.02,
+            y=1.05,
             text=f"<b>{co}</b>",
             showarrow=False,
             font=dict(size=12, color="#888888"),
@@ -758,7 +759,7 @@ def add_company_borders(fig, companies, x_labels, top_margin=60, row=None, col=N
         fig.add_annotation(**annotation_kwargs)
     fig.update_layout(margin=dict(t=top_margin))
     return fig
-    
+
 # 1.全局颜色工具
 def get_color_map(all_cos):
     current_selection_key = tuple(sorted(all_cos))
@@ -1293,7 +1294,7 @@ def create_kpmg_chart(df, field_name, title_prefix, show_labels, pct_font_size, 
                       sort_by_value=False, is_percentage=False):
     # ===== 从 session_state 读取配置 =====
     selected_cos = st.session_state.get('selected_cos_cache', [])
-    divisor = st.session_state.get('divisor', 1)          # 确保 divisor 获取正确
+    divisor = st.session_state.get('divisor', 1)
     prev_year = st.session_state.get('prev_year', 2024)
     latest_year = st.session_state.get('latest_year', 2025)
     highlight_co = st.session_state.get('highlight_co', "无")
@@ -1324,12 +1325,10 @@ def create_kpmg_chart(df, field_name, title_prefix, show_labels, pct_font_size, 
                           xaxis=dict(showticklabels=False), yaxis=dict(showticklabels=False))
         return fig
 
-    # ===== 关键修改：数值缩放 =====
+    # 数值缩放
     df_plot['value'] = df_plot[val_col]
     if not is_percentage:
-        # 金额类数据，根据 divisor 缩放（使显示值与所选单位匹配）
         df_plot['value'] = df_plot['value'] / divisor
-    # 百分比类不缩放
 
     y_old, y_new = str(prev_year), str(latest_year)
 
@@ -1347,19 +1346,18 @@ def create_kpmg_chart(df, field_name, title_prefix, show_labels, pct_font_size, 
     all_max = valid_vals.max() if not valid_vals.empty else 100
     abs_max = valid_vals.abs().max() if not valid_vals.empty else 100
     fixed_offset = all_max * 0.2
-    placeholder_h = (abs_max * 0.15 if abs_max > 0 else 10) / divisor   # 占位柱也缩放
+    placeholder_h = (abs_max * 0.15 if abs_max > 0 else 10) / divisor
 
     def fmt(val):
         if is_percentage:
             return f"{val:.1%}" if pd.notna(val) else ""
         else:
             if pd.notna(val):
-                # 根据单位自动调整小数位数
-                if divisor >= 1000:      # 十亿元
+                if divisor >= 1000:
                     return f"{val:,.2f}"
-                elif divisor >= 100:     # 亿元
+                elif divisor >= 100:
                     return f"{val:,.2f}"
-                else:                    # 百万元及以下
+                else:
                     return f"{val:,.0f}"
             return ""
 
@@ -1393,7 +1391,7 @@ def create_kpmg_chart(df, field_name, title_prefix, show_labels, pct_font_size, 
             constraintext='none'
         ))
 
-    # 标注增长率（基于缩放后的值）
+    # 标注增长率
     df_old_series = df_plot[df_plot['报告年份'] == y_old].set_index('公司')['value']
     df_new_series = df_plot[df_plot['报告年份'] == y_new].set_index('公司')['value']
     for co in sorted_cos:
@@ -1417,7 +1415,7 @@ def create_kpmg_chart(df, field_name, title_prefix, show_labels, pct_font_size, 
                 xshift=15
             )
 
-    # 高亮框
+    # 高亮框（特定追踪公司）
     if highlight_co in sorted_cos:
         idx = sorted_cos.index(highlight_co)
         fig.add_shape(
@@ -1429,60 +1427,51 @@ def create_kpmg_chart(df, field_name, title_prefix, show_labels, pct_font_size, 
             line=dict(color=HL_BOX_LINE, width=1.5),
             layer="below"
         )
-    
-    # ===== 🆕 添加公司边框（灰色） =====
+
+    # ===== 🆕 添加灰色公司边框 =====
     fig = add_company_borders(fig, sorted_cos, sorted_cos, top_margin=70)
-    # 隐藏 x 轴下方的公司名称（因为边框上方已显示）
+    # 隐藏 x 轴下方的公司名称（避免重复）
     fig.update_xaxes(showticklabels=False)
 
+    # ===== 布局设置 =====
     fig.update_layout(
         barmode='group',
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
         bargroupgap=0.0,
         bargap=global_gap,
-        legend=dict(orientation="h", yanchor="bottom", y=1.03, xanchor="right", x=1),
-        margin=dict(t=70, b=40, l=20, r=20),  # 顶部边距从 40 改为 70
-        height=700
-    )
-                          
-    fig.update_layout(
-        barmode='group',
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        bargroupgap=0.0,
-        bargap=global_gap,
-        legend=dict(orientation="h", yanchor="bottom", y=1.03, xanchor="right", x=1),
-        margin=dict(t=40, b=40, l=20, r=20),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1.08,           # 图例向右移动，避免与框线重叠
+            font=dict(size=12)
+        ),
+        margin=dict(t=70, b=40, l=20, r=80),  # 右侧边距增大，为图例留空间
         height=700
     )
     fig.update_xaxes(showgrid=False, zeroline=False, showline=False)
 
-    # ===== 设置纵轴：基于缩放后的数据设置范围和步长 =====
+    # ===== 设置纵轴 =====
     y_vals = df_plot['value'].dropna()
     if not y_vals.empty:
         y_min = y_vals.min()
         y_max = y_vals.max()
-        # 为标签留出边距（20% 空间）
         padding = (y_max - y_min) * 0.2 if y_max != y_min else abs(y_max) * 0.3
-        y_range = [y_min - padding if y_min < 0 else 0, 
+        y_range = [y_min - padding if y_min < 0 else 0,
                    y_max + padding if y_max > 0 else 0]
-        # 确保范围至少为 0 到 1
         if y_range[0] == 0 and y_range[1] == 0:
             y_range = [0, 1]
 
-        # ====== 🆕 新增：强制为增长率标签预留顶部空间 ======
         all_max_abs = y_vals.abs().max()
-        fixed_offset = all_max_abs * 0.2   # 与前方 fixed_offset 保持一致
+        fixed_offset = all_max_abs * 0.2
         max_label_y = y_max + fixed_offset if y_max > 0 else y_max
-        y_range[1] = max(y_range[1], max_label_y) * 1.05  # 再额外预留 5% 余量
-        # ====================================================
-        
-        # 智能步长：取数据范围的 1/6 ~ 1/8
+        y_range[1] = max(y_range[1], max_label_y) * 1.05
+
         data_range = y_range[1] - y_range[0]
         if data_range > 0:
             raw_step = data_range / 6
-            # 将步长规整到 1, 2, 5 的倍数
             magnitude = 10 ** (len(str(int(raw_step))) - 1) if raw_step >= 1 else 10 ** (len(str(int(raw_step * 10))) - 2)
             for base in [1, 2, 5]:
                 candidate = base * magnitude
@@ -1496,7 +1485,7 @@ def create_kpmg_chart(df, field_name, title_prefix, show_labels, pct_font_size, 
     else:
         y_range = [0, 1]
         step = 1
-    
+
     fig.update_yaxes(
         showgrid=False,
         zeroline=True,
@@ -1512,7 +1501,7 @@ def create_kpmg_chart(df, field_name, title_prefix, show_labels, pct_font_size, 
     )
 
     return fig
-
+                          
 # 5.2 保险业务构成（两种方法占比堆叠图）
 def create_method_composition_chart(df, cos, year, divisor=1, unit_label="百万元"):
     """
