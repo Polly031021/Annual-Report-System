@@ -1209,8 +1209,8 @@ def create_overview_table(df, cos, latest_year, prev_year, unit_label="百万元
     for m in metrics:
         df_table[m] = df_table[m].apply(fmt_pct)
     
-    # 构建表头：第一列"公司"不加额外文本，其他列显示三行
-    header_values = ['公司']
+    # 构建表头：第一列"公司"也使用三行（补两个空行），其他列显示三行
+    header_values = ['公司<br><br>']
     for display_name in display_names:
         header_values.append(f"{display_name}<br>%变化<br>25YE/24YE-1")
     
@@ -2147,7 +2147,102 @@ def create_profit_contribution_facet_chart(df, cos, year, divisor=1, unit_label=
         )
 
     return fig
+
+# 5.6 综合赔付率拆解堆叠图（新增）
+def create_cor_breakdown_stacked_chart(df, cos, year, divisor=1, unit_label="百万元", highlight_co="无"):
+    """
+    绘制综合赔付率拆解的堆叠柱状图（各因子占保险服务收入比例）
+    """
+    factors = [
+        "当期发生赔款及理赔费用",
+        "已发生赔款负债履约现金流变动",
+        "亏损合同损益",
+        "承保财务损益",
+        "再保净成本",
+        "提取保费准备金"
+    ]
+    colors = KPMG_COLORS[:len(factors)]  # 使用KPMG色板
     
+    raw = df.copy()
+    raw['报告年份'] = raw['报告年份'].astype(str).str.replace('.0', '', regex=False)
+    raw['公司'] = raw['公司'].astype(str).str.strip()
+    raw['字段名'] = raw['字段名'].astype(str).str.strip()
+    
+    # 只取最新年份
+    df_year = raw[raw['报告年份'] == str(year)]
+    
+    # 计算各公司保险服务收入（分母）
+    service_revenue = {}
+    for co in cos:
+        rev = df_year[(df_year['公司'] == co) & (df_year['字段名'] == '保险服务收入')]['(百万)人民币']
+        service_revenue[co] = rev.sum() if not rev.empty else 1.0  # 避免除以0
+    
+    # 构建数据
+    data = []
+    for co in cos:
+        row = {'公司': co}
+        for f in factors:
+            val = df_year[(df_year['公司'] == co) & (df_year['字段名'] == f)]['(百万)人民币']
+            val_sum = val.sum() if not val.empty else 0
+            ratio = val_sum / service_revenue[co] * 100  # 百分比
+            row[f] = ratio
+        data.append(row)
+    df_plot = pd.DataFrame(data)
+    
+    # 创建堆叠图
+    fig = go.Figure()
+    for i, f in enumerate(factors):
+        fig.add_trace(go.Bar(
+            x=df_plot['公司'],
+            y=df_plot[f],
+            name=f,
+            marker_color=colors[i % len(colors)],
+            text=[f"{v:.1f}%" if abs(v) > 0.5 else "" for v in df_plot[f]],
+            textposition='inside',
+            insidetextanchor='middle',
+            textfont=dict(size=10, color='white'),
+            hovertemplate=f"{f}: %{{y:.1f}}%<extra>%{{x}}</extra>"
+        ))
+    
+    # 添加0线
+    fig.add_hline(y=0, line_dash="dash", line_color="gray", line_width=1, opacity=0.5)
+    
+    # 高亮框（如果指定了highlight_co）
+    if highlight_co != "无" and highlight_co in df_plot['公司'].values:
+        idx = df_plot['公司'].tolist().index(highlight_co)
+        fig.add_shape(
+            type="rect",
+            xref="x", yref="y",
+            x0=idx - 0.45, x1=idx + 0.45,
+            y0=0, y1=1,
+            fillcolor="rgba(0,51,141,0.05)",
+            line=dict(color="rgba(0,51,141,0.8)", width=1.5),
+            layer="below"
+        )
+    
+    fig.update_layout(
+        barmode='relative',  # 堆叠
+        title=f"综合赔付率拆解（{year}YE）",
+        xaxis_title="公司",
+        yaxis_title="占保险服务收入比例（%）",
+        legend=dict(
+            orientation="v",
+            yanchor="middle",
+            y=0.5,
+            xanchor="right",
+            x=-0.15,  # 图例放在图表左侧
+            font=dict(size=11)
+        ),
+        height=500,
+        margin=dict(l=20, r=20, t=50, b=50),  # 左侧边距保持较小，图例会溢出
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        bargap=0.15,
+        bargroupgap=0.1,
+        hovermode='x unified'
+    )
+    return fig
+
 # 6.汇总表
 def create_nonlife_summary_table(df, cos, highlight_co="无"):
     cy, py = latest_year, prev_year
@@ -3087,20 +3182,12 @@ def render_pure_chart_entity(m_id, print_mode):
     # 3. 综合成本率拆解（多因子分组柱状图）
     # ==========================================
     if m_id == "cor_components":
-        if not print_mode:
-            # 非打印模式：显示五个图表
-            figs = create_cor_breakdown_chart(df_filtered, selected_cos, latest_year, divisor, current_hl)
-            for fig in figs:
-                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-            display_notes(m_id, df_filtered, "综合赔付率")
-            display_bottom_note(notes_dict.get(m_id, {}).get('note', ''))
-        else:
-            # 打印模式：堆叠显示
-            figs = create_cor_breakdown_chart(df_filtered, selected_cos, latest_year, divisor, current_hl)
-            for fig in figs:
-                show_chart(fig, print_mode, m_id)
-            display_notes(m_id, df_filtered, "综合赔付率")
-            display_bottom_note(notes_dict.get(m_id, {}).get('note', ''))
+        fig = create_cor_breakdown_stacked_chart(
+            df_filtered, selected_cos, latest_year, divisor, unit_label, current_hl
+        )
+        show_chart(fig, print_mode, m_id)
+        display_notes(m_id, df_filtered, "综合赔付率")
+        display_bottom_note(notes_dict.get(m_id, {}).get('note', ''))
         return
     # ==========================================
     # 4. 费用分类构成（使用通用多分类引擎）
