@@ -711,9 +711,41 @@ def ai_find_pages(pdf_bytes, api_key, target_tables, base_url, model_name, compa
 # 0.添加公司边框和标题
 def add_company_borders(fig, companies, x_labels, top_margin=60, row=None, col=None):
     """
-    为指定的图（或子图）添加公司边框和标题。
-    标题放在框线内部，靠近顶部，灰色。
+    为单图或子图添加公司边框和标题。
+    如果 row 和 col 不为空，则视为子图模式，直接覆盖整个子图区域。
     """
+    # ===== 子图模式 =====
+    if row is not None and col is not None:
+        # 每个子图只对应一家公司
+        if len(companies) == 1:
+            co = companies[0]
+            # 边框覆盖整个子图，y 方向延伸到 1.03
+            fig.add_shape(
+                type="rect",
+                xref="paper", yref="paper",
+                x0=0, x1=1,
+                y0=0, y1=1.03,
+                fillcolor="rgba(200,200,200,0.05)",
+                line=dict(color="#CCCCCC", width=1.2),
+                layer="below",
+                row=row, col=col
+            )
+            # 公司名称显示在子图顶部内部
+            fig.add_annotation(
+                x=0.5,
+                y=0.99,
+                text=f"<b>{co}</b>",
+                showarrow=False,
+                font=dict(size=12, color="#888888"),
+                xanchor="center",
+                yanchor="bottom",
+                xref="paper",
+                yref="paper",
+                row=row, col=col
+            )
+        return fig
+
+    # ===== 单图模式（原有逻辑） =====
     company_ranges = {}
     for co in companies:
         indices = [i for i, label in enumerate(x_labels) if co in label]
@@ -731,7 +763,6 @@ def add_company_borders(fig, companies, x_labels, top_margin=60, row=None, col=N
         width_extend = 0.55 if (end - start) > 0 else 0.45
         x0 = start - width_extend
         x1 = end + width_extend
-        # 框线顶部延伸到 1.03
         fig.add_shape(
             type="rect",
             xref="x", yref="paper",
@@ -741,10 +772,9 @@ def add_company_borders(fig, companies, x_labels, top_margin=60, row=None, col=N
             line=dict(color="#CCCCCC", width=1.2),
             layer="below"
         )
-        # 公司名称：底部对齐在 y=1.01，靠近框线顶部但不压线
-        annotation_kwargs = dict(
+        fig.add_annotation(
             x=(start + end) / 2,
-            y=0.985,                     
+            y=0.985,
             text=f"<b>{co}</b>",
             showarrow=False,
             font=dict(size=12, color="#888888"),
@@ -753,10 +783,6 @@ def add_company_borders(fig, companies, x_labels, top_margin=60, row=None, col=N
             xref="x",
             yref="paper"
         )
-        if row is not None and col is not None:
-            annotation_kwargs['row'] = row
-            annotation_kwargs['col'] = col
-        fig.add_annotation(**annotation_kwargs)
     fig.update_layout(margin=dict(t=top_margin))
     return fig
     
