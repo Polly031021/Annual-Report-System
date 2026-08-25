@@ -711,20 +711,17 @@ def ai_find_pages(pdf_bytes, api_key, target_tables, base_url, model_name, compa
 # 0.添加公司边框和标题
 def add_company_borders(fig, companies, x_labels, top_margin=60, row=1, col=1):
     """
-    为指定的子图添加公司边框和标题。
-    fig: Plotly Figure 对象
-    companies: 公司名称列表（按顺序）
-    x_labels: x 轴标签列表（字符串），用于匹配公司名称
-    top_margin: 顶部边距
-    row, col: 子图位置
+    为指定的子图（或整个图）添加公司边框和标题。
+    注意：add_shape 不支持 row/col，所以形状会作用于整个图；
+    对于子图，需要另外处理形状定位（后续可扩展）。
     """
-    # 对于每个公司，在 x_labels 中找到所有包含该公司的索引
+    # 确定每个公司在 x_labels 中的索引范围
     company_ranges = {}
     for co in companies:
         indices = [i for i, label in enumerate(x_labels) if co in label]
         if indices:
             company_ranges[co] = (min(indices), max(indices))
-    # 如果没有找到，尝试直接匹配（如果 x_labels 就是公司名）
+    # 如果直接匹配（x_labels 就是公司名称）
     if not company_ranges:
         for co in companies:
             if co in x_labels:
@@ -732,20 +729,22 @@ def add_company_borders(fig, companies, x_labels, top_margin=60, row=1, col=1):
                 company_ranges[co] = (idx, idx)
     if not company_ranges:
         return fig
+
     for co, (start, end) in company_ranges.items():
         width_extend = 0.55 if (end - start) > 0 else 0.4
         x0 = start - width_extend
         x1 = end + width_extend
+        # 添加矩形框（不传 row/col，默认作用域整个图）
         fig.add_shape(
             type="rect",
-            xref="x", yref="paper",
+            xref="x", yref="y",
             x0=x0, x1=x1,
             y0=0, y1=1,
             fillcolor="rgba(0,51,141,0.02)",
             line=dict(color="#00338D", width=1.5),
-            layer="below",
-            row=row, col=col
+            layer="below"
         )
+        # 添加公司名称注释（支持 row/col）
         fig.add_annotation(
             x=(start + end) / 2,
             y=1.02,
