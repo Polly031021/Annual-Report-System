@@ -2500,46 +2500,46 @@ def show_step_7_content():
     
     # ----- 数据检查与年份提取 -----
     if 'integrated_data' not in st.session_state or st.session_state['integrated_data'] is None:
-    # 判断用户角色
-    if st.session_state.get('user_role') == "普通用户":
-        st.info("📂 请上传已集成好的数据文件（Excel 或 CSV），格式需包含 '公司'、'报告年份'、'字段名'、'(百万)人民币' 等列。")
-        
-        # 提供示例模板下载（可选）
-        with st.expander("📄 查看所需数据格式示例"):
-            sample_df = pd.DataFrame({
-                "公司": ["示例公司A", "示例公司A"],
-                "报告年份": [2024, 2025],
-                "字段名": ["总资产", "总资产"],
-                "(百万)人民币": [100000, 110000]
-            })
-            st.dataframe(sample_df)
-            st.caption("请确保你的数据包含以上四列，且每一行对应一个公司、一个年份、一个指标。")
-        
-        uploaded_file = st.file_uploader("上传集成后的数据表", type=["xlsx", "csv"], key="step7_upload")
-        if uploaded_file is not None:
-            try:
-                if uploaded_file.name.endswith('.csv'):
-                    df = pd.read_csv(uploaded_file)
-                else:
-                    df = pd.read_excel(uploaded_file)
-                # 检查必需列
-                required_cols = ['公司', '报告年份', '字段名', '(百万)人民币']
-                if all(col in df.columns for col in required_cols):
-                    # 可选：将年份列转换为字符串并去除 .0
-                    df['报告年份'] = df['报告年份'].astype(str).str.replace('.0', '', regex=False)
-                    st.session_state['integrated_data'] = df
-                    st.success("✅ 数据加载成功！正在刷新...")
-                    st.rerun()
-                else:
-                    st.error(f"❌ 数据格式不正确，必须包含列：{required_cols}，你的数据列有：{df.columns.tolist()}")
-            except Exception as e:
-                st.error(f"❌ 读取文件失败：{e}")
-        # 阻止继续执行报告渲染（因为数据还不存在）
-        st.stop()
-    else:
-        # 项目组成员：提示去 Step 6
-        st.warning("⚠️ 请先在 Step 6 完成数据集成。")
-        st.stop()
+        # 判断用户角色
+        if st.session_state.get('user_role') == "普通用户":
+            st.info("📂 请上传已集成好的数据文件（Excel 或 CSV），格式需包含 '公司'、'报告年份'、'字段名'、'(百万)人民币' 等列。")
+            
+            # 提供示例模板
+            with st.expander("📄 查看所需数据格式示例"):
+                sample_df = pd.DataFrame({
+                    "公司": ["示例公司A", "示例公司A"],
+                    "报告年份": [2024, 2025],
+                    "字段名": ["总资产", "总资产"],
+                    "(百万)人民币": [100000, 110000]
+                })
+                st.dataframe(sample_df)
+                st.caption("请确保你的数据包含以上四列，且每一行对应一个公司、一个年份、一个指标。")
+            
+            uploaded_file = st.file_uploader("上传集成后的数据表", type=["xlsx", "csv"], key="step7_upload")
+            if uploaded_file is not None:
+                try:
+                    if uploaded_file.name.endswith('.csv'):
+                        df = pd.read_csv(uploaded_file)
+                    else:
+                        df = pd.read_excel(uploaded_file)
+                    # 检查必需列
+                    required_cols = ['公司', '报告年份', '字段名', '(百万)人民币']
+                    if all(col in df.columns for col in required_cols):
+                        # 将年份列转换为字符串并去除 .0
+                        df['报告年份'] = df['报告年份'].astype(str).str.replace('.0', '', regex=False)
+                        st.session_state['integrated_data'] = df
+                        st.success("✅ 数据加载成功！正在刷新...")
+                        st.rerun()
+                    else:
+                        st.error(f"❌ 数据格式不正确，必须包含列：{required_cols}，你的数据列有：{df.columns.tolist()}")
+                except Exception as e:
+                    st.error(f"❌ 读取文件失败：{e}")
+            # 阻止继续执行报告渲染（因为数据还不存在）
+            st.stop()
+        else:
+            # 项目组成员：提示去 Step 6
+            st.warning("⚠️ 请先在 Step 6 完成数据集成。")
+            st.stop()
     df_raw = st.session_state['integrated_data'].copy()
     valid_years = sorted([y for y in df_raw['报告年份'].dropna().astype(str).str.replace(".0", "", regex=False).unique() if y.isdigit()])
     latest_year = int(valid_years[-1]) if valid_years else 2025
