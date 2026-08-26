@@ -1831,6 +1831,7 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
     """
     绘制综合赔付率拆解的堆叠柱状图（各因子占保险服务收入比例）
     自动从数据中提取最近两个年份，每个柱子下方显示年份标签。
+    如果某公司某年份没有拆解因子，则用一个灰色柱子显示综合成本率。
     """
     factors = [
         "当期发生赔款及理赔费用",
@@ -1877,58 +1878,54 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
             rev = raw[(raw['公司'] == co) & (raw['报告年份'] == yr) & (raw['字段名'] == '保险服务收入')]['(百万)人民币']
             service_revenue[(co, yr)] = rev.sum() if not rev.empty else 1.0
     
-    # 构建数据
+    # 构建数据，包含因子和综合成本率
     rows = []
     for co in cos:
         for yr in years:
             row = {'公司': co, '年份': yr}
+            # 各因子占比
             for f in factors:
                 val = raw[(raw['公司'] == co) & (raw['报告年份'] == yr) & (raw['字段名'] == f)]['(百万)人民币']
                 val_sum = val.sum() if not val.empty else 0
                 ratio = val_sum / service_revenue[(co, yr)] * 100
                 row[f] = ratio
+            # 综合成本率（直接取数值，不除以分母，因为已经是比率）
+            cor_val = raw[(raw['公司'] == co) & (raw['报告年份'] == yr) & (raw['字段名'] == '综合成本率')]['(百万)人民币']
+            row['ratio_value'] = cor_val.iloc[0] if not cor_val.empty else 0.0
             rows.append(row)
     df_plot = pd.DataFrame(rows)
     
-    # ===== 🆕 修改：x轴标签只显示年份 =====
-    df_plot['x_label'] = df_plot['年份'] + 'YE'  # 只显示年份，不包含公司名
-    x_labels = df_plot['x_label'].unique()  # 实际是 ["2024YE", "2025YE"] 循环
+    # 判断哪些行因子之和为0（无拆解）
+    df_plot['factor_sum'] = df_plot[factors].sum(axis=1)
+    no_factor_mask = df_plot['factor_sum'] == 0
     
-    # 创建图表
-    fig = go.Figure()
-    for f in factors:
-        fig.add_trace(go.Bar(
-            x=df_plot['x_label'],
-            y=df_plot[f],
-            name=f,
-            marker_color=factor_colors[f],
-            legendgroup=f,
-            text=[f"{v:.1f}%" if abs(v) > 0.5 else "" for v in df_plot[f]],
-            textposition='inside',
-            insidetextanchor='middle',
-            textfont=dict(size=9, color='white'),
-            hovertemplate=f"{f}: %{{y:.1f}}%<extra>%{{x}}</extra>"
-        ))
+    # 动态因子列表
+    factor_cols = factors[:]  # 原始因子
+    if no_factor_mask.any():
+        # 对无因子行，将因子置0，添加特殊因子“综合成本率”
+        df_plot.loc[no_factor_mask, factors] = 0
+        df_plot['综合成本率'] = 0.0
+        df_plot.loc[no_factor_mask, '综合成本率'] = df_plot.loc[no_factor_mask, 'ratio_value'] * 100  # 转为百分比
+        factor_cols.append('综合成本率')
+        factor_colors['综合成本率'] = '#B0BEC5'  # 灰色
     
-    fig.add_hline(y=0, line_dash="dash", line_color="gray", line_width=1, opacity=0.5)
-    
-    # ===== 添加公司边框（公司名称在框线上方） =====
+    # 构造x轴标签（公司名 + 年份）
     df_plot['x_label'] = df_plot['公司'] + '<br>' + df_plot['年份'] + 'YE'
     x_labels = df_plot['x_label'].unique()
     
-    # 创建图表（使用原始x_label）
+    # 创建图表
     fig = go.Figure()
-    for f in factors:
+    for f in factor_cols:
         fig.add_trace(go.Bar(
             x=df_plot['x_label'],
             y=df_plot[f],
             name=f,
-            marker_color=factor_colors[f],
+            marker_color=factor_colors.get(f, '#CCCCCC'),
             legendgroup=f,
             text=[f"{v:.1f}%" if abs(v) > 0.5 else "" for v in df_plot[f]],
             textposition='inside',
             insidetextanchor='middle',
-            textfont=dict(size=9, color='white'),
+            textfont=dict(size=9, color='white' if f != '综合成本率' else '#333'),
             hovertemplate=f"{f}: %{{y:.1f}}%<extra>%{{x}}</extra>"
         ))
     
@@ -1937,23 +1934,18 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
     # 添加公司边框
     fig = add_company_borders(fig, cos, x_labels, top_margin=70)
     
-    # ===== 设置x轴显示年份标签 =====
-    # 获取所有唯一的x_label（公司+年份）的列表，按顺序
+    # 设置x轴显示年份标签
     all_labels = df_plot['x_label'].tolist()
-    # 生成年份列表
     year_labels = []
     for label in all_labels:
-        # 提取年份部分，格式为"公司<br>年份YE"
         if '<br>' in label:
             year_part = label.split('<br>')[1]
         else:
             year_part = label
         year_labels.append(year_part)
-    
-    # 更新x轴：使用年份作为显示文本
     fig.update_xaxes(
-        tickvals=all_labels,  # 实际的标签值
-        ticktext=year_labels,  # 显示为年份
+        tickvals=all_labels,
+        ticktext=year_labels,
         showticklabels=True,
         tickangle=0
     )
@@ -3288,6 +3280,8 @@ def render_pure_chart_entity(m_id, print_mode):
     # 3. 综合成本率拆解（多因子分组柱状图）
     # ==========================================
     if m_id == "cor_components":
+        # 从 selected_cos 中移除“太平产险”
+        filtered_cos = [co for co in selected_cos if co != "太平产险"]
         fig = create_cor_breakdown_stacked_chart(
             df_filtered, selected_cos, latest_year, divisor, unit_label, current_hl
         )
