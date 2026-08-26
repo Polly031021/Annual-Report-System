@@ -1886,18 +1886,22 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
             # 各因子占比
             for f in factors:
                 val = raw[(raw['公司'] == co) & (raw['报告年份'] == yr) & (raw['字段名'] == f)]['(百万)人民币']
-                val_sum = val.sum() if not val.empty else 0
+                val_sum = val.sum() if not val.empty else 0.0
                 ratio = val_sum / service_revenue[(co, yr)] * 100
                 row[f] = ratio
             # 综合成本率（直接取数值，不除以分母，因为已经是比率）
             cor_val = raw[(raw['公司'] == co) & (raw['报告年份'] == yr) & (raw['字段名'] == '综合成本率')]['(百万)人民币']
-            row['ratio_value'] = cor_val.iloc[0] if not cor_val.empty else 0.0
+            row['ratio_value'] = cor_val.iloc[0] if not cor_val.empty else np.nan
             rows.append(row)
     df_plot = pd.DataFrame(rows)
     
-    # 判断哪些行因子之和为0（无拆解）
+    # 将因子列中的 NaN 填充为 0，以便正确求和
+    df_plot[factors] = df_plot[factors].fillna(0)
+    # 计算因子之和
     df_plot['factor_sum'] = df_plot[factors].sum(axis=1)
-    no_factor_mask = df_plot['factor_sum'] == 0
+    
+    # 判断哪些行没有拆解因子（因子之和为0，且综合成本率有有效值）
+    no_factor_mask = (df_plot['factor_sum'] == 0) & (df_plot['ratio_value'].notna()) & (df_plot['ratio_value'] != 0)
     
     # 动态因子列表
     factor_cols = factors[:]  # 原始因子
@@ -3280,10 +3284,10 @@ def render_pure_chart_entity(m_id, print_mode):
     # 3. 综合成本率拆解（多因子分组柱状图）
     # ==========================================
     if m_id == "cor_components":
-        # 从 selected_cos 中移除“太平产险”
+        # 过滤掉太平产险
         filtered_cos = [co for co in selected_cos if co != "太平产险"]
         fig = create_cor_breakdown_stacked_chart(
-            df_filtered, selected_cos, latest_year, divisor, unit_label, current_hl
+            df_filtered, filtered_cos, latest_year, divisor, unit_label, current_hl
         )
         show_chart(fig, print_mode, m_id)
         display_notes(m_id, df_filtered, "综合赔付率")
@@ -3458,6 +3462,8 @@ def render_pure_chart_entity(m_id, print_mode):
     # 8. 费用结构拆解图（堆叠柱状图）
     # ==========================================
     if m_id == "expense_structure":
+        # 过滤掉太平产险
+        filtered_cos = [co for co in selected_cos if co != "太平产险"]
         if not print_mode:
             c1, c2, c3 = st.columns(3)
             with c1:
@@ -3472,8 +3478,8 @@ def render_pure_chart_entity(m_id, print_mode):
             bar_width = st.session_state.get(f"wid_{m_id}", 0.5)
         
         fig, _ = create_expense_structure_chart(
-            df_filtered, selected_cos,
-            show_labels=show_labels, label_size=label_size, bar_width=bar_width, 
+            df_filtered, filtered_cos,
+            show_labels=show_labels, label_size=label_size, bar_width=bar_width,
             co_font_size=13, highlight_co=current_hl
         )
         show_chart(fig, print_mode, m_id)
