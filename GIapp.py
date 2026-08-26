@@ -1830,7 +1830,6 @@ def create_profit_composition_chart(df, cos, year, divisor=1, unit_label="百万
 def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=1, unit_label="百万元", highlight_co="无"):
     """
     绘制综合赔付率拆解的堆叠柱状图（各因子占保险服务收入比例）
-    自动从数据中提取最近两个年份，每个柱子下方显示年份标签。
     如果某公司某年份没有拆解因子，则用一个灰色柱子显示综合成本率。
     """
     factors = [
@@ -1878,46 +1877,43 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
             rev = raw[(raw['公司'] == co) & (raw['报告年份'] == yr) & (raw['字段名'] == '保险服务收入')]['(百万)人民币']
             service_revenue[(co, yr)] = rev.sum() if not rev.empty else 1.0
     
-    # 构建数据，包含因子和综合成本率
+    # 构建数据
     rows = []
     for co in cos:
         for yr in years:
             row = {'公司': co, '年份': yr}
-            # 各因子占比
             for f in factors:
                 val = raw[(raw['公司'] == co) & (raw['报告年份'] == yr) & (raw['字段名'] == f)]['(百万)人民币']
                 val_sum = val.sum() if not val.empty else 0.0
                 ratio = val_sum / service_revenue[(co, yr)] * 100
                 row[f] = ratio
-            # 综合成本率（直接取数值，不除以分母，因为已经是比率）
             cor_val = raw[(raw['公司'] == co) & (raw['报告年份'] == yr) & (raw['字段名'] == '综合成本率')]['(百万)人民币']
             row['ratio_value'] = cor_val.iloc[0] if not cor_val.empty else np.nan
             rows.append(row)
     df_plot = pd.DataFrame(rows)
     
-    # 将因子列中的 NaN 填充为 0，以便正确求和
+    # 填充 NaN 为 0
     df_plot[factors] = df_plot[factors].fillna(0)
-    # 计算因子之和
     df_plot['factor_sum'] = df_plot[factors].sum(axis=1)
     
-    # 判断哪些行没有拆解因子（因子之和为0，且综合成本率有有效值）
-    no_factor_mask = (df_plot['factor_sum'] == 0) & (df_plot['ratio_value'].notna()) & (df_plot['ratio_value'] != 0)
+    # 调试输出（可删除）
+    # st.write("太平产险数据：", df_plot[df_plot['公司']=='太平产险'])
     
-    # 动态因子列表
-    factor_cols = factors[:]  # 原始因子
+    # 判断无因子但有综合成本率的行
+    no_factor_mask = (df_plot['factor_sum'] == 0) & df_plot['ratio_value'].notna() & (df_plot['ratio_value'] != 0)
+    
+    factor_cols = factors[:]
     if no_factor_mask.any():
-        # 对无因子行，将因子置0，添加特殊因子“综合成本率”
         df_plot.loc[no_factor_mask, factors] = 0
         df_plot['综合成本率'] = 0.0
-        df_plot.loc[no_factor_mask, '综合成本率'] = df_plot.loc[no_factor_mask, 'ratio_value'] * 100  # 转为百分比
+        df_plot.loc[no_factor_mask, '综合成本率'] = df_plot.loc[no_factor_mask, 'ratio_value'] * 100
         factor_cols.append('综合成本率')
-        factor_colors['综合成本率'] = '#B0BEC5'  # 灰色
+        factor_colors['综合成本率'] = '#B0BEC5'
     
-    # 构造x轴标签（公司名 + 年份）
+    # 构造x轴标签
     df_plot['x_label'] = df_plot['公司'] + '<br>' + df_plot['年份'] + 'YE'
     x_labels = df_plot['x_label'].unique()
     
-    # 创建图表
     fig = go.Figure()
     for f in factor_cols:
         fig.add_trace(go.Bar(
@@ -1934,63 +1930,32 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
         ))
     
     fig.add_hline(y=0, line_dash="dash", line_color="gray", line_width=1, opacity=0.5)
-    
-    # 添加公司边框
     fig = add_company_borders(fig, cos, x_labels, top_margin=70)
     
-    # 设置x轴显示年份标签
     all_labels = df_plot['x_label'].tolist()
-    year_labels = []
-    for label in all_labels:
-        if '<br>' in label:
-            year_part = label.split('<br>')[1]
-        else:
-            year_part = label
-        year_labels.append(year_part)
-    fig.update_xaxes(
-        tickvals=all_labels,
-        ticktext=year_labels,
-        showticklabels=True,
-        tickangle=0
-    )
+    year_labels = [label.split('<br>')[1] if '<br>' in label else label for label in all_labels]
+    fig.update_xaxes(tickvals=all_labels, ticktext=year_labels, showticklabels=True, tickangle=0)
     
-    # 高亮框（如有指定公司）
     if highlight_co != "无":
         highlight_indices = [i for i, label in enumerate(all_labels) if highlight_co in label]
         for idx in highlight_indices:
             fig.add_shape(
-                type="rect",
-                xref="x", yref="y",
-                x0=idx - 0.48, x1=idx + 0.48,
-                y0=0, y1=1,
+                type="rect", xref="x", yref="y",
+                x0=idx - 0.48, x1=idx + 0.48, y0=0, y1=1,
                 fillcolor="rgba(0,51,141,0.05)",
-                line=dict(color="rgba(0,51,141,0.8)", width=1.5),
-                layer="below"
+                line=dict(color="rgba(0,51,141,0.8)", width=1.5), layer="below"
             )
     
-    # 布局设置
     fig.update_layout(
         barmode='relative',
         title=f"综合赔付率拆解（{year_display}）",
-        xaxis_title="",
-        yaxis_title="占保险服务收入比例（%）",
-        legend=dict(
-            orientation="v",
-            yanchor="middle",
-            y=0.5,
-            xanchor="right",
-            x=-0.15,
-            font=dict(size=11)
-        ),
+        xaxis_title="", yaxis_title="占保险服务收入比例（%）",
+        legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="right", x=-0.15, font=dict(size=11)),
         height=550,
         margin=dict(l=20, r=20, t=70, b=60),
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        bargap=0.15,
-        bargroupgap=0.1,
-        hovermode='x unified'
+        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+        bargap=0.15, bargroupgap=0.1, hovermode='x unified'
     )
-    
     return fig
     
 # 5.5 保险服务收入业务构成堆叠图（保费贡献） - 按全局公司顺序
