@@ -4246,25 +4246,26 @@ def create_expense_structure_chart(df, selected_cos, show_labels, label_size, ba
     raw_df.columns = raw_df.columns.str.strip()
     raw_df['公司'] = raw_df['公司'].astype(str).str.strip()
     raw_df['字段名'] = raw_df['字段名'].astype(str).str.strip()
-    # 统一处理年份，去除 .0
     raw_df['报告年份'] = raw_df['报告年份'].astype(str).str.replace('.0', '', regex=False).str.strip()
-    # 过滤无效年份
     raw_df = raw_df[raw_df['报告年份'] != '']
     raw_df = raw_df[~raw_df['报告年份'].str.lower().isin(['nan', 'none'])]
     
+    # ===== 修改点 1：分母取数限定类别为 '保费收入' =====
     service_revenue = {}
     for co in selected_cos:
         co_clean = co.strip()
         for yr in years:
             mask = (raw_df['公司'] == co_clean) & \
                    (raw_df['报告年份'] == yr) & \
-                   (raw_df['字段名'] == '保险服务收入')
+                   (raw_df['字段名'] == '保险服务收入') & \
+                   (raw_df['类别'] == '保费收入')   # ← 新增类别过滤
             rev_series = raw_df.loc[mask, '(百万)人民币']
             rev = rev_series.sum() if not rev_series.empty else 0
             if pd.isna(rev) or rev == 0:
                 mask2 = (raw_df['公司'] == co_clean) & \
                         (raw_df['报告年份'] == yr) & \
-                        (raw_df['字段名'] == '保险业务收入')
+                        (raw_df['字段名'] == '保险业务收入') & \
+                        (raw_df['类别'] == '保费收入')   # ← 新增类别过滤
                 rev_series2 = raw_df.loc[mask2, '(百万)人民币']
                 rev = rev_series2.sum() if not rev_series2.empty else 0
             if rev == 0:
@@ -4277,7 +4278,8 @@ def create_expense_structure_chart(df, selected_cos, show_labels, label_size, ba
     
     for i, co in enumerate(selected_cos):
         co_clean = co.strip()
-        cd = raw_df[raw_df['公司'] == co_clean]
+        # ===== 修改点 2：取费用因子时限定类别为 '综合成本率拆解' =====
+        cd = raw_df[(raw_df['公司'] == co_clean) & (raw_df['类别'] == '综合成本率拆解')]
         vals = {}
         for f in fields:
             vals[f] = {}
