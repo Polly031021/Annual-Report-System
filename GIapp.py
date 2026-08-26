@@ -2950,7 +2950,7 @@ def show_step_7_content():
 
     # ----- 打印模式（一键显示全部）----- 
     if print_mode:
-        # ===== 🆕 封面页（使用 <img> 标签，更稳定） =====
+        # ===== 封面页（使用 <img> 标签，稳定且快速） =====
         cover_image_url = "https://raw.githubusercontent.com/Polly031021/Annual-Report-System/main/%E6%A0%87%E9%A2%98%E9%A1%B5.jpg"
     
         st.markdown(f"""
@@ -2986,23 +2986,25 @@ def show_step_7_content():
             justify-content: center;
             align-items: center;
             text-align: center;
-            color: white;
+            color: white !important;
             z-index: 2;
             font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
-            background: rgba(0, 0, 0, 0.3);  /* 可选的半透明遮罩，让文字更清晰 */
+            background: rgba(0, 0, 0, 0.3);
+        }}
+        .cover-title, .cover-subtitle, .cover-date {{
+            color: white !important;
+            text-shadow: 2px 2px 12px rgba(0,0,0,0.6);
         }}
         .cover-title {{
             font-size: 56px;
             font-weight: 700;
             letter-spacing: 4px;
-            text-shadow: 2px 2px 12px rgba(0,0,0,0.6);
             margin-bottom: 20px;
         }}
         .cover-subtitle {{
             font-size: 28px;
             font-weight: 300;
             letter-spacing: 8px;
-            text-shadow: 1px 1px 8px rgba(0,0,0,0.5);
             margin-bottom: 30px;
         }}
         .cover-date {{
@@ -3010,7 +3012,6 @@ def show_step_7_content():
             font-weight: 300;
             letter-spacing: 6px;
             opacity: 0.9;
-            text-shadow: 1px 1px 4px rgba(0,0,0,0.5);
         }}
         @media print {{
             .cover-page {{
@@ -3033,9 +3034,17 @@ def show_step_7_content():
         </div>
         """, unsafe_allow_html=True)
     
-        # 然后渲染所有模块（这部分不需要改动）
-        for idx, m_id in enumerate(ordered_modules):
-            render_report_module(m_id, print_mode, is_first=(idx == 0))
+        # ===== 关键改进：使用 st.status 显示渲染进度 =====
+        with st.status("📊 正在生成完整报告...", expanded=True) as status:
+            total = len(ordered_modules)
+            for idx, m_id in enumerate(ordered_modules):
+                status.update(
+                    label=f"正在渲染模块 {idx+1}/{total}: {m_id}",
+                    state="running"
+                )
+                render_report_module(m_id, print_mode, is_first=(idx == 0))
+            status.update(label="✅ 报告生成完成！", state="complete")
+    
         return
 
     # ----- 单模块模式 -----
