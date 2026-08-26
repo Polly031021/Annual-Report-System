@@ -3249,8 +3249,9 @@ def render_pure_chart_entity(m_id, print_mode):
     # 3. 综合成本率拆解（多因子分组柱状图）
     # ==========================================
     if m_id == "cor_components":
+        # 不再过滤太平产险，直接传入全部选中公司
         fig = create_cor_breakdown_stacked_chart(
-            df_filtered, filtered_cos, latest_year, divisor, unit_label, current_hl
+            df_filtered, selected_cos, latest_year, divisor, unit_label, current_hl
         )
         show_chart(fig, print_mode, m_id)
         display_notes(m_id, df_filtered, "综合赔付率")
