@@ -1915,10 +1915,9 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
     fig.update_xaxes(showticklabels=False)
     
     # ===== 🆕 在图表底部添加年份标注 =====
-    # 标注位置调整到 y=-0.12，在图表底部下方
     fig.add_annotation(
-        x=0.25,
-        y=-0.12,
+        x=0.20,
+        y=-0.10,
         text="2024YE",
         showarrow=False,
         font=dict(size=13, color="#333"),
@@ -1928,8 +1927,8 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
         yref="paper"
     )
     fig.add_annotation(
-        x=0.75,
-        y=-0.12,
+        x=0.80,
+        y=-0.10,
         text="2025YE",
         showarrow=False,
         font=dict(size=13, color="#333"),
@@ -1957,7 +1956,7 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
     fig.update_layout(
         barmode='relative',
         title=f"综合赔付率拆解（{year_display}）",
-        xaxis_title="公司",
+        xaxis_title="",                    # 去掉 "公司" 标题
         yaxis_title="占保险服务收入比例（%）",
         legend=dict(
             orientation="v",
@@ -1968,7 +1967,7 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
             font=dict(size=11)
         ),
         height=550,
-        margin=dict(l=20, r=20, t=70, b=130),  # 底部边距增大到130
+        margin=dict(l=20, r=20, t=70, b=120),  # 底部边距增大到 120
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
         bargap=0.15,
@@ -1977,7 +1976,7 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
     )
     return fig
 
-# 5.7 保险服务收入业务构成堆叠图（保费贡献） - 按全局公司顺序
+# 5.5 保险服务收入业务构成堆叠图（保费贡献） - 按全局公司顺序
 def create_premium_stacked_chart(df, cos, year, divisor=1, unit_label="百万元", highlight_co="无"):
     """
     绘制各公司保险服务收入业务构成堆叠图（按险种）
@@ -2102,7 +2101,7 @@ def create_premium_stacked_chart(df, cos, year, divisor=1, unit_label="百万元
     )
     return fig
 
-# 5.8 承保利润业务构成堆叠图 - 按全局公司顺序
+# 5.6 承保利润业务构成堆叠图 - 按全局公司顺序
 def create_profit_contribution_stacked_chart(df, cos, year, divisor=1, unit_label="百万元", highlight_co="无"):
     """
     绘制各公司承保利润业务构成堆叠图（按险种，显示占比）
