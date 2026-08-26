@@ -2949,6 +2949,7 @@ def show_step_7_content():
     st.markdown("<h3 class='no-print' style='font-weight:700;'>📊 公司级对标报告</h3>", unsafe_allow_html=True)
 
     # ----- 打印模式（一键显示全部）----- 
+    st.image("https://raw.githubusercontent.com/Polly031021/Annual-Report-System/main/%E6%A0%87%E9%A2%98%E9%A1%B5.jpg")
     if print_mode:
         # ===== 🆕 封面页（使用 GitHub 图片链接） =====
         cover_image_url = "https://raw.githubusercontent.com/Polly031021/Annual-Report-System/main/%E6%A0%87%E9%A2%98%E9%A1%B5.jpg"
