@@ -1914,30 +1914,6 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
     # 隐藏 x 轴下方的公司名称（避免重复）
     fig.update_xaxes(showticklabels=False)
     
-    # ===== 🆕 在图表底部添加年份标注 =====
-    fig.add_annotation(
-        x=0.20,
-        y=-0.10,
-        text="2024YE",
-        showarrow=False,
-        font=dict(size=13, color="#333"),
-        xanchor="center",
-        yanchor="top",
-        xref="paper",
-        yref="paper"
-    )
-    fig.add_annotation(
-        x=0.80,
-        y=-0.10,
-        text="2025YE",
-        showarrow=False,
-        font=dict(size=13, color="#333"),
-        xanchor="center",
-        yanchor="top",
-        xref="paper",
-        yref="paper"
-    )
-
     # 高亮框（如果有）
     if highlight_co != "无":
         x_labels = df_plot['x_label'].unique()
@@ -1967,15 +1943,40 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
             font=dict(size=11)
         ),
         height=550,
-        margin=dict(l=20, r=20, t=70, b=120),  # 底部边距增大到 120
+        margin=dict(l=20, r=20, t=70, b=130),  # 底部边距增大到130
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
         bargap=0.15,
         bargroupgap=0.1,
-        hovermode='x unified'
+        hovermode='x unified',
+        # ===== 关键：在这里添加 annotations（确保显示） =====
+        annotations=[
+            dict(
+                x=0.20,
+                y=-0.12,
+                text="2024YE",
+                showarrow=False,
+                font=dict(size=13, color="#333"),
+                xanchor="center",
+                yanchor="top",
+                xref="paper",
+                yref="paper"
+            ),
+            dict(
+                x=0.80,
+                y=-0.12,
+                text="2025YE",
+                showarrow=False,
+                font=dict(size=13, color="#333"),
+                xanchor="center",
+                yanchor="top",
+                xref="paper",
+                yref="paper"
+            )
+        ]
     )
     return fig
-
+    
 # 5.5 保险服务收入业务构成堆叠图（保费贡献） - 按全局公司顺序
 def create_premium_stacked_chart(df, cos, year, divisor=1, unit_label="百万元", highlight_co="无"):
     """
