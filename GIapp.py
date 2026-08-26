@@ -1929,6 +1929,7 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
                 layer="below"
             )
 
+    # ===== 先更新布局（不包含 annotations） =====
     fig.update_layout(
         barmode='relative',
         title=f"综合赔付率拆解（{year_display}）",
@@ -1943,38 +1944,38 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
             font=dict(size=11)
         ),
         height=550,
-        margin=dict(l=20, r=20, t=70, b=130),  # 底部边距增大到130
+        margin=dict(l=20, r=20, t=70, b=130),
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
         bargap=0.15,
         bargroupgap=0.1,
-        hovermode='x unified',
-        # ===== 关键：在这里添加 annotations（确保显示） =====
-        annotations=[
-            dict(
-                x=0.20,
-                y=-0.12,
-                text="2024YE",
-                showarrow=False,
-                font=dict(size=13, color="#333"),
-                xanchor="center",
-                yanchor="top",
-                xref="paper",
-                yref="paper"
-            ),
-            dict(
-                x=0.80,
-                y=-0.12,
-                text="2025YE",
-                showarrow=False,
-                font=dict(size=13, color="#333"),
-                xanchor="center",
-                yanchor="top",
-                xref="paper",
-                yref="paper"
-            )
-        ]
+        hovermode='x unified'
     )
+    
+    # ===== 在 update_layout 之后添加年份标注（避免被覆盖） =====
+    fig.add_annotation(
+        x=0.20,
+        y=-0.10,
+        text="2024YE",
+        showarrow=False,
+        font=dict(size=13, color="#333"),
+        xanchor="center",
+        yanchor="top",
+        xref="paper",
+        yref="paper"
+    )
+    fig.add_annotation(
+        x=0.80,
+        y=-0.10,
+        text="2025YE",
+        showarrow=False,
+        font=dict(size=13, color="#333"),
+        xanchor="center",
+        yanchor="top",
+        xref="paper",
+        yref="paper"
+    )
+    
     return fig
     
 # 5.5 保险服务收入业务构成堆叠图（保费贡献） - 按全局公司顺序
