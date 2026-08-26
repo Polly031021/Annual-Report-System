@@ -2950,9 +2950,97 @@ def show_step_7_content():
 
     # ----- 打印模式（一键显示全部）----- 
     if print_mode:
-        # 渲染所有模块
+        # ===== 🆕 封面页 =====
+        # 使用你提供的 GitHub raw 链接
+        cover_image_url = "https://raw.githubusercontent.com/Polly031021/Annual-Report-System/main/%E6%A0%87%E9%A2%98%E9%A1%B5.png"
+        
+        st.markdown(f"""
+        <style>
+        /* 封面页样式 */
+        .cover-page {{
+            width: 100%;
+            height: 100vh;
+            background-image: url('{cover_image_url}');
+            background-size: cover;
+            background-position: center;
+            position: relative;
+            page-break-after: always;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            color: white;
+            font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+            margin: 0;
+            padding: 0;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }}
+        .cover-page::before {{
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.3);
+            z-index: 1;
+        }}
+        .cover-title {{
+            font-size: 56px;
+            font-weight: 700;
+            letter-spacing: 4px;
+            text-shadow: 2px 2px 12px rgba(0,0,0,0.6);
+            z-index: 2;
+            margin-bottom: 20px;
+        }}
+        .cover-subtitle {{
+            font-size: 28px;
+            font-weight: 300;
+            letter-spacing: 8px;
+            text-shadow: 1px 1px 8px rgba(0,0,0,0.5);
+            z-index: 2;
+            margin-bottom: 30px;
+        }}
+        .cover-date {{
+            font-size: 20px;
+            font-weight: 300;
+            letter-spacing: 6px;
+            opacity: 0.9;
+            text-shadow: 1px 1px 4px rgba(0,0,0,0.5);
+            z-index: 2;
+        }}
+        .cover-page > * {{
+            position: relative;
+            z-index: 2;
+        }}
+        @media print {{
+            .cover-page {{
+                height: 100%;
+                width: 100%;
+                position: relative;
+                margin: 0;
+                padding: 0;
+                page-break-after: always;
+            }}
+            body, html {{
+                margin: 0;
+                padding: 0;
+            }}
+        }}
+        </style>
+        <div class="cover-page">
+            <div class="cover-title">2025年新会计准则业绩表现和洞察</div>
+            <div class="cover-subtitle">保险公司</div>
+            <div class="cover-date">2026年8月</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # 然后渲染所有模块
         for idx, m_id in enumerate(ordered_modules):
             render_report_module(m_id, print_mode, is_first=(idx == 0))
+        return
         return
 
     # ----- 单模块模式 -----
