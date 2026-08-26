@@ -1830,8 +1830,7 @@ def create_profit_composition_chart(df, cos, year, divisor=1, unit_label="百万
 def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=1, unit_label="百万元", highlight_co="无"):
     """
     绘制综合赔付率拆解的堆叠柱状图（各因子占保险服务收入比例）
-    自动从数据中提取最近两个年份，横轴为公司，每个公司显示两个柱子
-    添加灰色公司边框，隐藏x轴公司名称，底部标注年份。
+    自动从数据中提取最近两个年份，每个柱子下方显示年份标签。
     """
     factors = [
         "当期发生赔款及理赔费用",
@@ -1861,7 +1860,6 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
         [int(y) for y in raw['报告年份'].unique() if y.isdigit()],
         reverse=True
     )
-    # 确保 year_display 在所有路径下都有定义
     if len(available_years) >= 2:
         years = [str(available_years[1]), str(available_years[0])]
         year_display = f"{available_years[1]}YE vs {available_years[0]}YE"
@@ -1869,7 +1867,6 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
         years = [str(available_years[0]), str(available_years[0])]
         year_display = f"{available_years[0]}YE"
     else:
-        # 如果数据中没有年份，使用传入的年份
         years = [str(prev_year), str(latest_year)]
         year_display = f"{prev_year}YE vs {latest_year}YE"
     
@@ -1893,9 +1890,9 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
             rows.append(row)
     df_plot = pd.DataFrame(rows)
     
-    # 构造横轴标签：公司名 + 换行 + 年份YE
-    df_plot['x_label'] = df_plot['公司'] + '<br>' + df_plot['年份'] + 'YE'
-    x_labels = df_plot['x_label'].unique()
+    # ===== 🆕 修改：x轴标签只显示年份 =====
+    df_plot['x_label'] = df_plot['年份'] + 'YE'  # 只显示年份，不包含公司名
+    x_labels = df_plot['x_label'].unique()  # 实际是 ["2024YE", "2025YE"] 循环
     
     # 创建图表
     fig = go.Figure()
@@ -1913,17 +1910,57 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
             hovertemplate=f"{f}: %{{y:.1f}}%<extra>%{{x}}</extra>"
         ))
     
-    # 零线
     fig.add_hline(y=0, line_dash="dash", line_color="gray", line_width=1, opacity=0.5)
     
-    # 添加公司边框（必须确保 add_company_borders 函数存在）
+    # ===== 添加公司边框（公司名称在框线上方） =====
+    df_plot['x_label'] = df_plot['公司'] + '<br>' + df_plot['年份'] + 'YE'
+    x_labels = df_plot['x_label'].unique()
+    
+    # 创建图表（使用原始x_label）
+    fig = go.Figure()
+    for f in factors:
+        fig.add_trace(go.Bar(
+            x=df_plot['x_label'],
+            y=df_plot[f],
+            name=f,
+            marker_color=factor_colors[f],
+            legendgroup=f,
+            text=[f"{v:.1f}%" if abs(v) > 0.5 else "" for v in df_plot[f]],
+            textposition='inside',
+            insidetextanchor='middle',
+            textfont=dict(size=9, color='white'),
+            hovertemplate=f"{f}: %{{y:.1f}}%<extra>%{{x}}</extra>"
+        ))
+    
+    fig.add_hline(y=0, line_dash="dash", line_color="gray", line_width=1, opacity=0.5)
+    
+    # 添加公司边框
     fig = add_company_borders(fig, cos, x_labels, top_margin=70)
-    # 隐藏x轴标签（避免重复）
-    fig.update_xaxes(showticklabels=False)
+    
+    # ===== 设置x轴显示年份标签 =====
+    # 获取所有唯一的x_label（公司+年份）的列表，按顺序
+    all_labels = df_plot['x_label'].tolist()
+    # 生成年份列表
+    year_labels = []
+    for label in all_labels:
+        # 提取年份部分，格式为"公司<br>年份YE"
+        if '<br>' in label:
+            year_part = label.split('<br>')[1]
+        else:
+            year_part = label
+        year_labels.append(year_part)
+    
+    # 更新x轴：使用年份作为显示文本
+    fig.update_xaxes(
+        tickvals=all_labels,  # 实际的标签值
+        ticktext=year_labels,  # 显示为年份
+        showticklabels=True,
+        tickangle=0
+    )
     
     # 高亮框（如有指定公司）
     if highlight_co != "无":
-        highlight_indices = [i for i, label in enumerate(x_labels) if highlight_co in label]
+        highlight_indices = [i for i, label in enumerate(all_labels) if highlight_co in label]
         for idx in highlight_indices:
             fig.add_shape(
                 type="rect",
@@ -1950,36 +1987,12 @@ def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=
             font=dict(size=11)
         ),
         height=550,
-        margin=dict(l=20, r=20, t=70, b=80),  # 底部边距 80 足够显示标注
+        margin=dict(l=20, r=20, t=70, b=60),
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
         bargap=0.15,
         bargroupgap=0.1,
         hovermode='x unified'
-    )
-    
-    # 添加年份标注（紧挨框线底部）
-    fig.add_annotation(
-        x=0.20,
-        y=-0.02,
-        text="2024YE",
-        showarrow=False,
-        font=dict(size=13, color="#333"),
-        xanchor="center",
-        yanchor="top",
-        xref="paper",
-        yref="paper"
-    )
-    fig.add_annotation(
-        x=0.80,
-        y=-0.02,
-        text="2025YE",
-        showarrow=False,
-        font=dict(size=13, color="#333"),
-        xanchor="center",
-        yanchor="top",
-        xref="paper",
-        yref="paper"
     )
     
     return fig
