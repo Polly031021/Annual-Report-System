@@ -3606,12 +3606,80 @@ def render_pure_chart_entity(m_id, print_mode):
         display_notes(m_id, df_filtered, "保险业务收入")
         display_bottom_note(notes_dict.get(m_id, {}).get('note', ''))
         return
-    
+    # ==========================================
+    # 保险服务收入（新准则）—— 三年柱状图
+    # ==========================================
+    if m_id == "premium_ranking":
+        available_years = sorted([int(y) for y in df_filtered['报告年份'].unique() if y.isdigit()])
+        years = available_years[-3:] if len(available_years) >= 3 else available_years
+        if not years:
+            st.warning("未找到有效年份数据")
+            return
+        fig = create_multi_year_bar_chart(
+            df_filtered, "保险服务收入", selected_cos, years,
+            divisor=divisor, unit_label=unit_label, highlight_co=current_hl, is_percentage=False
+        )
+        show_chart(fig, print_mode, m_id)
+        display_notes(m_id, df_filtered, "保险服务收入")
+        display_bottom_note(notes_dict.get(m_id, {}).get('note', ''))
+        return
+
+    # ==========================================
+    # 新旧准则比值 —— 三年柱状图
+    # ==========================================
+    if m_id == "new_old_ratio":
+        available_years = sorted([int(y) for y in df_filtered['报告年份'].unique() if y.isdigit()])
+        years = available_years[-3:] if len(available_years) >= 3 else available_years
+        if not years:
+            st.warning("未找到有效年份数据")
+            return
+        fig = create_multi_year_bar_chart(
+            df_filtered, "新旧准则比值", selected_cos, years,
+            divisor=1, unit_label="比值", highlight_co=current_hl, is_percentage=False
+        )
+        show_chart(fig, print_mode, m_id)
+        display_notes(m_id, df_filtered, "新旧准则比值")
+        display_bottom_note(notes_dict.get(m_id, {}).get('note', ''))
+        return
+
+    # ==========================================
+    # 投资成分占比 —— 三年折线图
+    # ==========================================
+    if m_id == "investment_component":
+        available_years = sorted([int(y) for y in df_filtered['报告年份'].unique() if y.isdigit()])
+        years = available_years[-3:] if len(available_years) >= 3 else available_years
+        if not years:
+            st.warning("未找到有效年份数据")
+            return
+        fig = create_multi_year_line_chart(
+            df_filtered, "投资成分占比", selected_cos, years,
+            divisor=1, unit_label="百分比", highlight_co=current_hl, is_percentage=True
+        )
+        show_chart(fig, print_mode, m_id)
+        display_notes(m_id, df_filtered, "投资成分占比", is_pct=True)
+        display_bottom_note(notes_dict.get(m_id, {}).get('note', ''))
+        return
+
+    # ==========================================
+    # 保费增长率（旧准则）—— 三年折线图
+    # ==========================================
+    if m_id == "premium_growth":
+        available_years = sorted([int(y) for y in df_filtered['报告年份'].unique() if y.isdigit()])
+        years = available_years[-3:] if len(available_years) >= 3 else available_years
+        if not years:
+            st.warning("未找到有效年份数据")
+            return
+        fig = create_multi_year_line_chart(
+            df_filtered, "保费增长率（旧准则）", selected_cos, years,
+            divisor=1, unit_label="百分比", highlight_co=current_hl, is_percentage=True
+        )
+        show_chart(fig, print_mode, m_id)
+        display_notes(m_id, df_filtered, "保费增长率", is_pct=True)
+        display_bottom_note(notes_dict.get(m_id, {}).get('note', ''))
+        return
+
+        
     single_metric_map = {
-        "premium_ranking": ("保险服务收入", True, False),
-        "new_old_ratio": ("新旧准则比值", False, True),
-        "investment_component": ("投资成分占比", False, True),    # ← 改为“投资成分占比”
-        "premium_growth": ("保费增长率（旧准则）", False, True),  # ← 改为“保费增长率（旧准则）”
         "loss_ratio": ("综合赔付率", False, True),
         "expense_ratio": ("综合费用率", False, True),
         "loss_component": ("亏损成分占比", False, True),
