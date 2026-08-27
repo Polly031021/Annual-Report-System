@@ -2839,6 +2839,18 @@ def create_line_subplots_chart(df, field_name, cos, years, divisor=1, unit_label
                 showlegend=False  # 每个子图单独显示，不叠加图例
             ), row=1, col=col)
 
+        # 添加灰色边框
+        fig.add_shape(
+            type="rect",
+            xref="x domain", yref="y domain",
+            x0=0, x1=1,
+            y0=0, y1=1,
+            fillcolor="rgba(200,200,200,0.05)",
+            line=dict(color="#CCCCCC", width=1.2),
+            layer="below",
+            row=1, col=col
+        )
+        
         # 高亮边框
         if highlight_co != "无" and co == highlight_co:
             fig.add_shape(
@@ -3746,15 +3758,16 @@ def render_pure_chart_entity(m_id, print_mode):
         return
 
     # ==========================================
-    # 新旧准则比值 —— 三年柱状图
+    # 新旧准则比值 —— 三年折线图
     # ==========================================
     if m_id == "new_old_ratio":
-        available_years = sorted([int(y) for y in df_filtered['报告年份'].unique() if y.isdigit()])
-        years = available_years[-3:] if len(available_years) >= 3 else available_years
-        if not years:
-            st.warning("未找到有效年份数据")
+        df_temp = df_filtered[df_filtered['字段名'].str.strip() == '新旧准则比值']
+        available_years = sorted([int(y) for y in df_temp['报告年份'].unique() if y.isdigit()])
+        if not available_years:
+            st.warning("未找到新旧准则比值数据")
             return
-        fig = create_multi_year_line_chart(
+        years = available_years
+        fig = create_line_subplots_chart(
             df_filtered, "新旧准则比值", selected_cos, years,
             divisor=1, unit_label="比值", highlight_co=current_hl,
             is_percentage=False, decimal_places=3
@@ -3768,11 +3781,12 @@ def render_pure_chart_entity(m_id, print_mode):
     # 投资成分占比 —— 三年折线图
     # ==========================================
     if m_id == "investment_component":
-        available_years = sorted([int(y) for y in df_filtered['报告年份'].unique() if y.isdigit()])
-        years = available_years[-3:] if len(available_years) >= 3 else available_years
-        if not years:
-            st.warning("未找到有效年份数据")
+        df_temp = df_filtered[df_filtered['字段名'].str.strip() == '投资成分占比']
+        available_years = sorted([int(y) for y in df_temp['报告年份'].unique() if y.isdigit()])
+        if not available_years:
+            st.warning("未找到投资成分占比数据")
             return
+        years = available_years  # 显示所有存在的年份
         fig = create_line_subplots_chart(
             df_filtered, "投资成分占比", selected_cos, years,
             divisor=1, unit_label="百分比", highlight_co=current_hl,
