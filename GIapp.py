@@ -1832,6 +1832,7 @@ def create_profit_stacked_pct_chart(df, cos, years, divisor=1, unit_label="百�
     每个公司一个子图，柱子的正负方向反映各组成部分的实际正负贡献。
     正贡献向上，负贡献向下，两者的绝对值之和为100%（基于|承保|+|投资|）。
     柱顶/底显示总利润金额，内部显示各部分的绝对值百分比。
+    图例水平置于底部，纵轴自动适配数据范围。
     """
     field_uw = "承保利润"
     field_inv = "投资利润"
@@ -1841,7 +1842,6 @@ def create_profit_stacked_pct_chart(df, cos, years, divisor=1, unit_label="百�
     df_year = df_year[df_year['报告年份'].isin([str(y) for y in years])]
     df_year = df_year[df_year['公司'].isin(cos)]
 
-    # 获取可用字段（模糊匹配）
     available_fields = df_year['字段名'].unique()
     norm_available = [normalize_field(f) for f in available_fields]
     target_uw = normalize_field(field_uw)
@@ -1861,7 +1861,7 @@ def create_profit_stacked_pct_chart(df, cos, years, divisor=1, unit_label="百�
         fig.update_layout(height=400, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
         return fig
 
-    # 提取数据，计算每个公司每年的各部分（已换算单位）
+    # 提取数据
     data = {}
     for co in cos:
         data[co] = {}
@@ -1877,7 +1877,6 @@ def create_profit_stacked_pct_chart(df, cos, years, divisor=1, unit_label="百�
                 "总计": (val_uw + val_inv) / divisor
             }
 
-    # 过滤掉承保和投资均为0的公司（避免除零）
     valid_cos = [co for co in cos if any(abs(data[co][str(yr)]["承保"]) + abs(data[co][str(yr)]["投资"]) != 0 for yr in years)]
     if not valid_cos:
         fig = go.Figure()
@@ -1889,8 +1888,11 @@ def create_profit_stacked_pct_chart(df, cos, years, divisor=1, unit_label="百�
                         subplot_titles=[f"<b>{co}</b>" for co in valid_cos],
                         horizontal_spacing=0.02 if n > 1 else 0)
 
-    color_uw = "#00338D"   # 深蓝（承保）
-    color_inv = "#1E49E2"  # 亮蓝（投资）
+    color_uw = "#00338D"
+    color_inv = "#1E49E2"
+
+    # 用于收集所有 y 值，以便动态调整纵轴范围
+    all_y_values = []
 
     for col_idx, co in enumerate(valid_cos):
         col = col_idx + 1
@@ -1911,8 +1913,9 @@ def create_profit_stacked_pct_chart(df, cos, years, divisor=1, unit_label="百�
                 uw_pct = inv_pct = 0
             uw_pcts.append(uw_pct)
             inv_pcts.append(inv_pct)
+            all_y_values.extend([uw_pct, inv_pct])
 
-        # 承保部分（可正可负）
+        # 承保部分
         fig.add_trace(go.Bar(
             x=x_labels,
             y=uw_pcts,
@@ -1926,7 +1929,7 @@ def create_profit_stacked_pct_chart(df, cos, years, divisor=1, unit_label="百�
             showlegend=(col_idx == 0)
         ), row=1, col=col)
 
-        # 投资部分（可正可负）
+        # 投资部分
         fig.add_trace(go.Bar(
             x=x_labels,
             y=inv_pcts,
@@ -1940,14 +1943,13 @@ def create_profit_stacked_pct_chart(df, cos, years, divisor=1, unit_label="百�
             showlegend=(col_idx == 0)
         ), row=1, col=col)
 
-        # 标注总利润金额（净高度处）
+        # 标注总利润金额
         for idx, yr in enumerate(years):
             total = total_vals[idx]
             if total != 0:
-                # 净高度百分比 = (总利润 / (|承保|+|投资|)) * 100
                 abs_sum = abs(data[co][str(yr)]["承保"]) + abs(data[co][str(yr)]["投资"])
                 net_pct = (total / abs_sum) * 100 if abs_sum != 0 else 0
-                y_pos = net_pct + (5 if net_pct >= 0 else -5)  # 偏移5%
+                y_pos = net_pct + (5 if net_pct >= 0 else -5)
                 fig.add_annotation(
                     x=x_labels[idx],
                     y=y_pos,
@@ -1971,32 +1973,54 @@ def create_profit_stacked_pct_chart(df, cos, years, divisor=1, unit_label="百�
                 row=1, col=col
             )
 
-        fig.update_layout(
-            barmode='relative',
-            height=450,
-            margin=dict(t=60, b=15, l=40, r=20),   # 底部边距从40减小到15
-            legend=dict(
-                orientation="v",                    # 改为垂直排列
-                yanchor="top",
-                y=0.85,                             # 图例放在图表内部上方，避开标题
-                xanchor="right",
-                x=0.98,
-                font=dict(size=11)
-            ),
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            bargap=0.15,
-            bargroupgap=0.1
-        )
+    # 动态计算 y 轴范围
+    if all_y_values:
+        min_y = min(all_y_values)
+        max_y = max(all_y_values)
+        # 留 10% 边距
+        padding = (max_y - min_y) * 0.1 if max_y != min_y else 10
+        y_range = [min_y - padding, max_y + padding]
+        # 如果最小值为正，下限设为0；如果最大值为负，上限设为0（但通常有正有负）
+        if min_y >= 0:
+            y_range[0] = 0
+        if max_y <= 0:
+            y_range[1] = 0
+        # 确保至少留出标注空间（±5%）
+        if y_range[0] > -5:
+            y_range[0] = min(y_range[0], -5)
+        if y_range[1] < 5:
+            y_range[1] = max(y_range[1], 5)
+    else:
+        y_range = [-10, 10]
 
-        # 调整子图标题位置，避免与图例重叠
-        for ann in fig.layout.annotations:
-            if ann.text and "<b>" in ann.text:
-                ann.update(y=1.02)
+    # 布局
+    fig.update_layout(
+        barmode='relative',
+        height=450,
+        margin=dict(t=60, b=50, l=40, r=20),   # 底部留空间给图例
+        legend=dict(
+            orientation="h",                    # 水平排列
+            yanchor="top",
+            y=-0.15,                           # 放在图表底部外侧
+            xanchor="center",
+            x=0.5,
+            font=dict(size=12)
+        ),
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        bargap=0.15,
+        bargroupgap=0.1
+    )
 
-    fig.update_yaxes(range=[-110, 110], tickformat=".0f", title_text="占比（%）", row=1, col=1)
+    # 应用 y 轴范围到所有子图
+    fig.update_yaxes(range=y_range, tickformat=".0f", title_text="占比（%）", row=1, col=1)
     for i in range(1, n+1):
         fig.update_xaxes(tickangle=0, row=1, col=i)
+
+    # 调整子图标题（公司名称）位置，避免与图例重叠
+    for ann in fig.layout.annotations:
+        if ann.text and "<b>" in ann.text:
+            ann.update(y=1.02)
 
     return fig
     
