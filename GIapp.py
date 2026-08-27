@@ -1971,17 +1971,28 @@ def create_profit_stacked_pct_chart(df, cos, years, divisor=1, unit_label="百�
                 row=1, col=col
             )
 
-    fig.update_layout(
-        barmode='relative',
-        height=450,
-        margin=dict(t=60, b=40, l=40, r=20),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5,
-                    font=dict(size=12)),
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        bargap=0.15,
-        bargroupgap=0.1
-    )
+        fig.update_layout(
+            barmode='relative',
+            height=450,
+            margin=dict(t=60, b=15, l=40, r=20),   # 底部边距从40减小到15
+            legend=dict(
+                orientation="v",                    # 改为垂直排列
+                yanchor="top",
+                y=0.85,                             # 图例放在图表内部上方，避开标题
+                xanchor="right",
+                x=0.98,
+                font=dict(size=11)
+            ),
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            bargap=0.15,
+            bargroupgap=0.1
+        )
+
+        # 调整子图标题位置，避免与图例重叠
+        for ann in fig.layout.annotations:
+            if ann.text and "<b>" in ann.text:
+                ann.update(y=1.02)
 
     fig.update_yaxes(range=[-110, 110], tickformat=".0f", title_text="占比（%）", row=1, col=1)
     for i in range(1, n+1):
