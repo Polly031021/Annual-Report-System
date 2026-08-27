@@ -1829,9 +1829,9 @@ def create_profit_composition_chart(df, cos, year, divisor=1, unit_label="百万
 def create_profit_stacked_pct_chart(df, cos, years, divisor=1, unit_label="百万元", highlight_co="无"):
     """
     绘制每家公司承保利润与投资利润的百分比堆叠柱状图（两年对比）
-    每个公司一个子图，柱高100%（绝对值），方向反映总利润正负。
-    内部显示各组成部分占绝对值比例，柱顶/底显示总利润金额。
-    图例显示"保险服务业绩"和"投资服务业绩"。
+    每个公司一个子图，柱子的正负方向反映各组成部分的实际正负贡献。
+    正贡献向上，负贡献向下，两者的绝对值之和为100%（基于|承保|+|投资|）。
+    柱顶/底显示总利润金额，内部显示各部分的绝对值百分比。
     """
     field_uw = "承保利润"
     field_inv = "投资利润"
@@ -1861,7 +1861,7 @@ def create_profit_stacked_pct_chart(df, cos, years, divisor=1, unit_label="百�
         fig.update_layout(height=400, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
         return fig
 
-    # 提取数据
+    # 提取数据，计算每个公司每年的各部分（已换算单位）
     data = {}
     for co in cos:
         data[co] = {}
@@ -1871,27 +1871,24 @@ def create_profit_stacked_pct_chart(df, cos, years, divisor=1, unit_label="百�
             val_uw = val_uw.iloc[0] if not val_uw.empty else 0.0
             val_inv = df_year[(df_year['公司'] == co) & (df_year['报告年份'] == yr_str) & (df_year['字段名'] == actual_inv)]['(百万)人民币']
             val_inv = val_inv.iloc[0] if not val_inv.empty else 0.0
-            total = val_uw + val_inv
             data[co][yr_str] = {
                 "承保": val_uw / divisor,
                 "投资": val_inv / divisor,
-                "总计": total / divisor
+                "总计": (val_uw + val_inv) / divisor
             }
 
-    # 过滤掉总利润为0的公司（避免除零）
-    valid_cos = [co for co in cos if any(data[co][str(yr)]["总计"] != 0 for yr in years)]
+    # 过滤掉承保和投资均为0的公司（避免除零）
+    valid_cos = [co for co in cos if any(abs(data[co][str(yr)]["承保"]) + abs(data[co][str(yr)]["投资"]) != 0 for yr in years)]
     if not valid_cos:
         fig = go.Figure()
-        fig.add_annotation(text="所有公司总利润均为0，无法计算占比", x=0.5, y=0.5, showarrow=False)
+        fig.add_annotation(text="所有公司承保和投资均为0", x=0.5, y=0.5, showarrow=False)
         return fig
 
-    # 构建子图
     n = len(valid_cos)
     fig = make_subplots(rows=1, cols=n, shared_yaxes=True,
                         subplot_titles=[f"<b>{co}</b>" for co in valid_cos],
                         horizontal_spacing=0.02 if n > 1 else 0)
 
-    # 颜色
     color_uw = "#00338D"   # 深蓝（承保）
     color_inv = "#1E49E2"  # 亮蓝（投资）
 
@@ -1906,24 +1903,16 @@ def create_profit_stacked_pct_chart(df, cos, years, divisor=1, unit_label="百�
             yr_str = str(yr)
             total = data[co][yr_str]["总计"]
             total_vals.append(total)
-            if total != 0:
-                uw = data[co][yr_str]["承保"]
-                inv = data[co][yr_str]["投资"]
-                abs_total = abs(total)
-                # 计算占绝对值的百分比
-                uw_pct = (uw / abs_total) * 100
-                inv_pct = (inv / abs_total) * 100
-                # 若总利润为负，整体方向向下
-                if total < 0:
-                    uw_pct = -uw_pct
-                    inv_pct = -inv_pct
+            abs_sum = abs(data[co][yr_str]["承保"]) + abs(data[co][yr_str]["投资"])
+            if abs_sum != 0:
+                uw_pct = (data[co][yr_str]["承保"] / abs_sum) * 100
+                inv_pct = (data[co][yr_str]["投资"] / abs_sum) * 100
             else:
-                uw_pct = 0
-                inv_pct = 0
+                uw_pct = inv_pct = 0
             uw_pcts.append(uw_pct)
             inv_pcts.append(inv_pct)
 
-        # 承保部分
+        # 承保部分（可正可负）
         fig.add_trace(go.Bar(
             x=x_labels,
             y=uw_pcts,
@@ -1937,7 +1926,7 @@ def create_profit_stacked_pct_chart(df, cos, years, divisor=1, unit_label="百�
             showlegend=(col_idx == 0)
         ), row=1, col=col)
 
-        # 投资部分
+        # 投资部分（可正可负）
         fig.add_trace(go.Bar(
             x=x_labels,
             y=inv_pcts,
@@ -1951,11 +1940,14 @@ def create_profit_stacked_pct_chart(df, cos, years, divisor=1, unit_label="百�
             showlegend=(col_idx == 0)
         ), row=1, col=col)
 
-        # 柱顶/底添加总利润金额
+        # 标注总利润金额（净高度处）
         for idx, yr in enumerate(years):
             total = total_vals[idx]
             if total != 0:
-                y_pos = 105 if total > 0 else -105
+                # 净高度百分比 = (总利润 / (|承保|+|投资|)) * 100
+                abs_sum = abs(data[co][str(yr)]["承保"]) + abs(data[co][str(yr)]["投资"])
+                net_pct = (total / abs_sum) * 100 if abs_sum != 0 else 0
+                y_pos = net_pct + (5 if net_pct >= 0 else -5)  # 偏移5%
                 fig.add_annotation(
                     x=x_labels[idx],
                     y=y_pos,
@@ -1964,7 +1956,7 @@ def create_profit_stacked_pct_chart(df, cos, years, divisor=1, unit_label="百�
                     font=dict(size=10, color="#333"),
                     row=1, col=col,
                     xanchor="center",
-                    yanchor="bottom" if total > 0 else "top"
+                    yanchor="bottom" if net_pct >= 0 else "top"
                 )
 
         # 高亮公司边框
@@ -1979,7 +1971,6 @@ def create_profit_stacked_pct_chart(df, cos, years, divisor=1, unit_label="百�
                 row=1, col=col
             )
 
-    # 布局
     fig.update_layout(
         barmode='relative',
         height=450,
