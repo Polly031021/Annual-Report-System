@@ -2657,10 +2657,11 @@ def create_multi_year_bar_chart(df, field_name, cos, years, divisor=1, unit_labe
     return fig
 
 
-def create_multi_year_line_chart(df, field_name, cos, years, divisor=1, unit_label="百万元", highlight_co="无", is_percentage=False):
+def create_multi_year_line_chart(df, field_name, cos, years, divisor=1, unit_label="百万元", highlight_co="无", is_percentage=False, decimal_places=1):
     """
     绘制多年份折线图（横轴为年份，每条线代表一个公司）
-    用于投资成分占比、保费增长率等百分比指标
+    用于投资成分占比、保费增长率等百分比指标，或比值指标。
+    decimal_places: 数值标签保留的小数位数
     """
     df_clean = df.copy()
     df_clean['字段名'] = df_clean['字段名'].astype(str).str.strip()
@@ -2686,10 +2687,8 @@ def create_multi_year_line_chart(df, field_name, cos, years, divisor=1, unit_lab
         return fig
 
     val_col = '(百万)人民币' if '(百万)人民币' in df_plot.columns else df_plot.columns[-1]
-    # 构建数据：每个公司一条线
     fig = go.Figure()
     color_map = {co: KPMG_COLORS[i % len(KPMG_COLORS)] for i, co in enumerate(cos)}
-    # 按最新年份排序（降序），以便图例顺序
     latest_yr = max(years)
     sort_df = df_plot[df_plot['报告年份'] == str(latest_yr)].set_index('公司')[val_col]
     sorted_cos = sorted(cos, key=lambda x: sort_df.get(x, 0), reverse=True)
@@ -2706,7 +2705,6 @@ def create_multi_year_line_chart(df, field_name, cos, years, divisor=1, unit_lab
             else:
                 v = v / divisor if pd.notna(v) else np.nan
             co_values.append(v)
-        # 只保留有数值的年份
         valid_pairs = [(yr, v) for yr, v in zip(years, co_values) if pd.notna(v)]
         if valid_pairs:
             x_vals = [yr for yr, _ in valid_pairs]
@@ -2718,12 +2716,11 @@ def create_multi_year_line_chart(df, field_name, cos, years, divisor=1, unit_lab
                 name=co,
                 line=dict(width=2, color=color_map[co]),
                 marker=dict(size=8, color=color_map[co]),
-                text=[f"{v:.1f}%" if is_percentage else f"{v:.1f}" for v in y_vals],
+                text=[f"{v:.{decimal_places}f}{'%' if is_percentage else ''}" for v in y_vals],
                 textposition="top center",
                 textfont=dict(size=10)
             ))
 
-    # 高亮追踪公司（加粗线）
     if highlight_co != "无" and highlight_co in cos:
         for trace in fig.data:
             if trace.name == highlight_co:
@@ -2734,8 +2731,6 @@ def create_multi_year_line_chart(df, field_name, cos, years, divisor=1, unit_lab
     y_max = max([max(y) for y in [trace.y for trace in fig.data] if y]) if fig.data else 1
     padding = (y_max - y_min) * 0.15 if y_max != y_min else 5
     y_range = [max(0, y_min - padding), y_max + padding]
-    if is_percentage:
-        y_range = [max(0, y_min - padding), y_max + padding]
 
     fig.update_layout(
         height=450,
@@ -2752,13 +2747,139 @@ def create_multi_year_line_chart(df, field_name, cos, years, divisor=1, unit_lab
         ),
         yaxis=dict(
             range=y_range,
-            tickformat=".1f" if is_percentage else ",.0f",
-            title_text="百分比（%）" if is_percentage else f"金额（{unit_label}）",
+            tickformat="." + str(decimal_places) + "f",
+            title_text="百分比（%）" if is_percentage else f"{unit_label}",
             zeroline=True,
             zerolinecolor='gray'
         ),
         hovermode='x unified'
     )
+    return fig
+
+#5.9 投资成分占比、保费增长率折线图
+def create_line_subplots_chart(df, field_name, cos, years, divisor=1, unit_label="", highlight_co="无", is_percentage=False, decimal_places=1):
+    """
+    为每家公司生成独立的折线子图，横轴为年份，显示该公司的趋势。
+    适用于投资成分占比、保费增长率等指标。
+    """
+    df_clean = df.copy()
+    df_clean['字段名'] = df_clean['字段名'].astype(str).str.strip()
+    df_clean['公司'] = df_clean['公司'].astype(str).str.strip()
+    df_clean['报告年份'] = df_clean['报告年份'].astype(str).str.replace('.0', '', regex=False).str.strip()
+    df_clean = df_clean[df_clean['公司'].isin(cos)]
+    if '类别' in df_clean.columns:
+        df_clean = df_clean[df_clean['类别'] == '保费收入']
+
+    norm_field = normalize_field(field_name)
+    df_plot = df_clean[df_clean['字段名'].apply(lambda x: normalize_field(x) == norm_field)].copy()
+    if df_plot.empty:
+        fig = go.Figure()
+        fig.add_annotation(text=f"未找到{field_name}数据", x=0.5, y=0.5, showarrow=False)
+        fig.update_layout(height=400)
+        return fig
+
+    available_years = sorted([int(y) for y in df_plot['报告年份'].unique() if y.isdigit()])
+    years = [y for y in years if y in available_years]
+    if not years:
+        fig = go.Figure()
+        fig.add_annotation(text="指定年份无数据", x=0.5, y=0.5, showarrow=False)
+        return fig
+
+    val_col = '(百万)人民币' if '(百万)人民币' in df_plot.columns else df_plot.columns[-1]
+    # 构建数据字典
+    data = {}
+    for co in cos:
+        co_data = df_plot[df_plot['公司'] == co]
+        data[co] = {}
+        for yr in years:
+            yr_str = str(yr)
+            val = co_data[co_data['报告年份'] == yr_str][val_col]
+            v = val.iloc[0] if not val.empty else np.nan
+            if is_percentage:
+                v = v * 100 if pd.notna(v) else np.nan
+            else:
+                v = v / divisor if pd.notna(v) else np.nan
+            data[co][yr] = v
+
+    # 过滤掉所有年份数据都为nan的公司
+    valid_cos = [co for co in cos if any(not np.isnan(data[co][yr]) for yr in years)]
+    if not valid_cos:
+        fig = go.Figure()
+        fig.add_annotation(text="所有公司数据均为空", x=0.5, y=0.5, showarrow=False)
+        return fig
+
+    n = len(valid_cos)
+    fig = make_subplots(rows=1, cols=n, shared_yaxes=True,
+                        subplot_titles=[f"<b>{co}</b>" for co in valid_cos],
+                        horizontal_spacing=0.02 if n > 1 else 0)
+
+    # 颜色
+    color_map = {co: KPMG_COLORS[i % len(KPMG_COLORS)] for i, co in enumerate(valid_cos)}
+
+    for col_idx, co in enumerate(valid_cos):
+        col = col_idx + 1
+        x_vals = []
+        y_vals = []
+        for yr in years:
+            v = data[co][yr]
+            if not np.isnan(v):
+                x_vals.append(yr)
+                y_vals.append(v)
+        if x_vals:
+            fig.add_trace(go.Scatter(
+                x=x_vals,
+                y=y_vals,
+                mode='lines+markers+text',
+                name=co,  # 图例可能不显示，但保留
+                line=dict(width=2, color=color_map[co]),
+                marker=dict(size=8, color=color_map[co]),
+                text=[f"{v:.{decimal_places}f}{'%' if is_percentage else ''}" for v in y_vals],
+                textposition="top center",
+                textfont=dict(size=10),
+                showlegend=False  # 每个子图单独显示，不叠加图例
+            ), row=1, col=col)
+
+        # 高亮边框
+        if highlight_co != "无" and co == highlight_co:
+            fig.add_shape(
+                type="rect",
+                xref="x domain", yref="y domain",
+                x0=-0.05, x1=1.05, y0=-0.1, y1=1.1,
+                fillcolor="rgba(0,51,141,0.05)",
+                line=dict(color="rgba(0,51,141,0.8)", width=1.5),
+                layer="above",
+                row=1, col=col
+            )
+
+    # 调整布局
+    fig.update_layout(
+        height=450,
+        margin=dict(t=60, b=40, l=40, r=20),
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        bargap=0.15,
+        bargroupgap=0.1
+    )
+
+    # 计算统一的 y 轴范围（所有子图共享）
+    all_vals = [v for co in valid_cos for yr in years for v in [data[co][yr]] if not np.isnan(v)]
+    if all_vals:
+        y_min = min(all_vals)
+        y_max = max(all_vals)
+        padding = (y_max - y_min) * 0.15 if y_max != y_min else 5
+        y_range = [max(0, y_min - padding), y_max + padding]
+    else:
+        y_range = [0, 1]
+
+    fig.update_yaxes(range=y_range, tickformat=f".{decimal_places}f", title_text="百分比（%）" if is_percentage else unit_label, row=1, col=1)
+    for i in range(1, n+1):
+        fig.update_xaxes(tickvals=years, ticktext=[f"{y}YE" for y in years], row=1, col=i)
+
+    # 调整子图标题位置
+    for ann in fig.layout.annotations:
+        if ann.text and "<b>" in ann.text:
+            ann.update(y=1.02)
+
     return fig
 
 # 6.汇总表
@@ -3633,9 +3754,10 @@ def render_pure_chart_entity(m_id, print_mode):
         if not years:
             st.warning("未找到有效年份数据")
             return
-        fig = create_multi_year_bar_chart(
+        fig = create_multi_year_line_chart(
             df_filtered, "新旧准则比值", selected_cos, years,
-            divisor=1, unit_label="比值", highlight_co=current_hl, is_percentage=False
+            divisor=1, unit_label="比值", highlight_co=current_hl,
+            is_percentage=False, decimal_places=3
         )
         show_chart(fig, print_mode, m_id)
         display_notes(m_id, df_filtered, "新旧准则比值")
@@ -3651,9 +3773,10 @@ def render_pure_chart_entity(m_id, print_mode):
         if not years:
             st.warning("未找到有效年份数据")
             return
-        fig = create_multi_year_line_chart(
+        fig = create_line_subplots_chart(
             df_filtered, "投资成分占比", selected_cos, years,
-            divisor=1, unit_label="百分比", highlight_co=current_hl, is_percentage=True
+            divisor=1, unit_label="百分比", highlight_co=current_hl,
+            is_percentage=True, decimal_places=1
         )
         show_chart(fig, print_mode, m_id)
         display_notes(m_id, df_filtered, "投资成分占比", is_pct=True)
@@ -3664,14 +3787,18 @@ def render_pure_chart_entity(m_id, print_mode):
     # 保费增长率（旧准则）—— 三年折线图
     # ==========================================
     if m_id == "premium_growth":
-        available_years = sorted([int(y) for y in df_filtered['报告年份'].unique() if y.isdigit()])
-        years = available_years[-3:] if len(available_years) >= 3 else available_years
-        if not years:
-            st.warning("未找到有效年份数据")
+        # 从数据中提取保费增长率字段实际存在的年份
+        df_temp = df_filtered[df_filtered['字段名'].str.strip() == '保费增长率（旧准则）']
+        available_years = sorted([int(y) for y in df_temp['报告年份'].unique() if y.isdigit()])
+        if not available_years:
+            st.warning("未找到保费增长率数据")
             return
-        fig = create_multi_year_line_chart(
+        # 直接使用存在的年份（通常为2024和2025）
+        years = available_years
+        fig = create_line_subplots_chart(
             df_filtered, "保费增长率（旧准则）", selected_cos, years,
-            divisor=1, unit_label="百分比", highlight_co=current_hl, is_percentage=True
+            divisor=1, unit_label="百分比", highlight_co=current_hl,
+            is_percentage=True, decimal_places=1
         )
         show_chart(fig, print_mode, m_id)
         display_notes(m_id, df_filtered, "保费增长率", is_pct=True)
