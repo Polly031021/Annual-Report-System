@@ -1246,9 +1246,9 @@ def create_overview_table(df, cos, latest_year, prev_year, unit_label="百万元
     返回 Plotly 表格，表头单元格包含三行：指标名称、%变化、25YE/24YE-1
     """
     # 提取所需指标（内部字段名）
-    metrics = ["总资产", "净资产", "保险服务收入", "承保利润", "净利润"]
+    metrics = ["保险服务收入", "承保利润", "净利润"]
     # 对应的显示名称（将“承保利润”显示为“保险服务业绩”）
-    display_names = ["总资产", "净资产", "保险服务收入", "保险服务业绩", "净利润"]
+    display_names = ["保险服务收入", "保险服务业绩", "净利润"]
     
     # 获取最近两年数据
     df_latest = df[df['报告年份'].astype(str) == str(latest_year)]
@@ -2415,6 +2415,124 @@ def create_profit_contribution_stacked_chart(df, cos, year, divisor=1, unit_labe
     )
     return fig
 
+#5.7 保险业务收入柱状图
+def create_premium_old_chart(df, selected_cos, years, divisor=1, unit_label="百万元", highlight_co="无"):
+    """
+    绘制多家公司多年保险业务收入（旧准则）的分组柱状图
+    横轴为公司，每个公司显示三年的柱子（年份分组）
+    支持公司边框、高亮追踪、数值标签
+    """
+    field_name = "保险业务收入"
+    df_clean = df.copy()
+    df_clean['字段名'] = df_clean['字段名'].astype(str).str.strip()
+    df_clean['公司'] = df_clean['公司'].astype(str).str.strip()
+    df_clean['报告年份'] = df_clean['报告年份'].astype(str).str.replace('.0', '', regex=False).str.strip()
+    df_clean = df_clean[df_clean['公司'].isin(selected_cos)]
+    # 筛选字段，且限制类别为“保费收入”（避免误取）
+    if '类别' in df_clean.columns:
+        df_clean = df_clean[df_clean['类别'] == '保费收入']
+    # 筛选目标字段（模糊匹配保险业务收入）
+    norm_field = normalize_field(field_name)
+    df_plot = df_clean[df_clean['字段名'].apply(lambda x: normalize_field(x) == norm_field)].copy()
+    if df_plot.empty:
+        fig = go.Figure()
+        fig.add_annotation(text="未找到保险业务收入数据", x=0.5, y=0.5, showarrow=False, font=dict(size=16, color="red"))
+        fig.update_layout(height=500, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+        return fig
+    
+    # 按年份过滤（取用户指定的年份，若数据中不存在则跳过）
+    available_years = sorted([int(y) for y in df_plot['报告年份'].unique() if y.isdigit()])
+    years = [y for y in years if y in available_years]
+    if not years:
+        fig = go.Figure()
+        fig.add_annotation(text="指定年份无数据", x=0.5, y=0.5, showarrow=False)
+        return fig
+    
+    # 取数值列
+    val_col = '(百万)人民币' if '(百万)人民币' in df_plot.columns else df_plot.columns[-1]
+    # 构造数据透视
+    pivot_df = df_plot.pivot_table(index='公司', columns='报告年份', values=val_col, aggfunc='first').reindex(selected_cos)
+    # 按最新年份排序（降序）
+    latest_yr = str(max(years))
+    if latest_yr in pivot_df.columns:
+        pivot_df['_sort'] = pivot_df[latest_yr]
+        pivot_df = pivot_df.sort_values('_sort', ascending=False).drop('_sort', axis=1)
+    sorted_cos = pivot_df.index.tolist()
+    
+    # 颜色映射（KPMG蓝色系渐变）
+    color_map = {str(y): KPMG_COLORS[i % len(KPMG_COLORS)] for i, y in enumerate(years)}
+    # 若年份多于4个，补充更多颜色
+    if len(years) > len(KPMG_COLORS):
+        import plotly.express as px
+        extra = px.colors.qualitative.Plotly
+        for i, y in enumerate(years):
+            if y not in color_map:
+                color_map[str(y)] = extra[i % len(extra)]
+    
+    fig = go.Figure()
+    # 为每个年份添加 trace
+    for yr in years:
+        yr_str = str(yr)
+        values = pivot_df[yr_str].fillna(0).tolist() if yr_str in pivot_df.columns else [0]*len(sorted_cos)
+        # 除以 divisor
+        values = [v / divisor for v in values]
+        # 数值标签
+        texts = [f"{v:.1f}" if v != 0 else "" for v in values]
+        fig.add_trace(go.Bar(
+            name=f"{yr}YE",
+            x=sorted_cos,
+            y=values,
+            marker_color=color_map[yr_str],
+            text=texts,
+            textposition='outside',
+            textfont=dict(size=10),
+            width=0.25,
+            offsetgroup=yr_str  # 确保同一公司下的柱子按年份分组
+        ))
+    
+    # 添加高亮框
+    if highlight_co != "无" and highlight_co in sorted_cos:
+        idx = sorted_cos.index(highlight_co)
+        fig.add_shape(
+            type="rect",
+            xref="x", yref="paper",
+            x0=idx - 0.45, x1=idx + 0.45,
+            y0=-0.08, y1=1,
+            fillcolor="rgba(0,51,141,0.05)",
+            line=dict(color="rgba(0,51,141,0.8)", width=1.5),
+            layer="below"
+        )
+    
+    # 添加公司边框（灰色框）
+    fig = add_company_borders(fig, sorted_cos, sorted_cos, top_margin=70)
+    
+    # 隐藏 x 轴下方的公司名称（避免重复，因为边框已有）
+    fig.update_xaxes(showticklabels=False)
+    
+    # 纵轴格式
+    y_max = max([max(v) for v in [pivot_df[yr_str].fillna(0)/divisor for yr_str in years if yr_str in pivot_df.columns]] + [1])
+    y_range = [0, y_max * 1.25]
+    
+    fig.update_layout(
+        barmode='group',
+        height=500,
+        margin=dict(t=70, b=40, l=50, r=20),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        yaxis=dict(
+            range=y_range,
+            tickformat=",.0f",
+            title_text=f"金额（{unit_label}）",
+            zeroline=True,
+            zerolinecolor='gray'
+        ),
+        xaxis=dict(showgrid=False, zeroline=False, showline=False),
+        bargap=0.15,
+        bargroupgap=0.1
+    )
+    return fig
+
 # 6.汇总表
 def create_nonlife_summary_table(df, cos, highlight_co="无"):
     cy, py = latest_year, prev_year
@@ -3193,16 +3311,9 @@ def show_step_7_content():
         </div>
         """, unsafe_allow_html=True)
     
-        # ===== 关键改进：使用 st.status 显示渲染进度 =====
-        with st.status("📊 正在生成完整报告...", expanded=True) as status:
-            total = len(ordered_modules)
-            for idx, m_id in enumerate(ordered_modules):
-                status.update(
-                    label=f"正在渲染模块 {idx+1}/{total}: {m_id}",
-                    state="running"
-                )
-                render_report_module(m_id, print_mode, is_first=(idx == 0))
-            status.update(label="✅ 报告生成完成！", state="complete")
+        # 直接渲染所有模块，不显示进度条
+        for idx, m_id in enumerate(ordered_modules):
+            render_report_module(m_id, print_mode, is_first=(idx == 0))
     
         return
 
@@ -3252,6 +3363,22 @@ def render_pure_chart_entity(m_id, print_mode):
     # ==========================================
     # 2. 单指标柱状图（两年对比 + 增长率标注）
     # ==========================================
+    if m_id == "premium_old":  # 保险业务收入（旧准则）
+        # 自动获取数据中存在的年份（取最近三年，若不足则取全部）
+        available_years = sorted([int(y) for y in df_filtered['报告年份'].unique() if y.isdigit()])
+        # 取最近三年（若不足则取全部）
+        years = available_years[-3:] if len(available_years) >= 3 else available_years
+        if not years:
+            st.warning("未找到有效年份数据")
+            return
+        fig = create_premium_old_chart(
+            df_filtered, selected_cos, years, divisor, unit_label, current_hl
+        )
+        show_chart(fig, print_mode, m_id)
+        display_notes(m_id, df_filtered, "保险业务收入")
+        display_bottom_note(notes_dict.get(m_id, {}).get('note', ''))
+        return
+    
     single_metric_map = {
         "premium_ranking": ("保险服务收入", True, False),
         "new_old_ratio": ("新旧准则比值", False, True),
