@@ -1825,7 +1825,179 @@ def create_profit_composition_chart(df, cos, year, divisor=1, unit_label="百万
         bargroupgap=0.1,
     )
     return fig
-    
+
+def create_profit_stacked_chart(df, cos, years, divisor=1, unit_label="百万元", highlight_co="无"):
+    """
+    绘制每家公司承保利润与投资利润的堆叠柱状图（显示两年对比）
+    每个公司有两个柱子（年份），每个柱子堆叠承保和投资利润，柱顶显示净利润，内部显示占比。
+    """
+    # 字段名
+    field_uw = "承保利润"
+    field_inv = "投资利润"
+
+    df_year = df.copy()
+    df_year['报告年份'] = df_year['报告年份'].astype(str).str.replace('.0', '', regex=False).str.strip()
+    df_year = df_year[df_year['报告年份'].isin([str(y) for y in years])]
+    df_year = df_year[df_year['公司'].isin(cos)]
+
+    # 获取可用字段（模糊匹配）
+    available_fields = df_year['字段名'].unique()
+    norm_available = [normalize_field(f) for f in available_fields]
+    target_uw = normalize_field(field_uw)
+    target_inv = normalize_field(field_inv)
+
+    actual_uw = None
+    actual_inv = None
+    for f in available_fields:
+        if normalize_field(f) == target_uw:
+            actual_uw = f
+        if normalize_field(f) == target_inv:
+            actual_inv = f
+
+    if actual_uw is None or actual_inv is None:
+        fig = go.Figure()
+        fig.add_annotation(text="未找到承保利润或投资利润数据", x=0.5, y=0.5, showarrow=False, font=dict(size=16, color="red"))
+        fig.update_layout(height=400, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+        return fig
+
+    # 提取数据
+    data = {}
+    for co in cos:
+        data[co] = {}
+        for yr in years:
+            yr_str = str(yr)
+            val_uw = df_year[(df_year['公司'] == co) & (df_year['报告年份'] == yr_str) & (df_year['字段名'] == actual_uw)]['(百万)人民币']
+            val_uw = val_uw.iloc[0] if not val_uw.empty else 0.0
+            val_inv = df_year[(df_year['公司'] == co) & (df_year['报告年份'] == yr_str) & (df_year['字段名'] == actual_inv)]['(百万)人民币']
+            val_inv = val_inv.iloc[0] if not val_inv.empty else 0.0
+            data[co][yr_str] = {"承保": val_uw / divisor, "投资": val_inv / divisor}
+
+    # 构建图表
+    fig = go.Figure()
+    # 每个公司两列（年份）
+    company_positions = {}
+    x_labels = []
+    x_vals = []
+    for i, co in enumerate(cos):
+        base = i * 2
+        company_positions[co] = base
+        for yr in years:
+            x_vals.append(base + (0 if yr == years[0] else 1))
+            x_labels.append(f"{co}<br>{yr}YE")
+
+    # 添加承保利润 trace（堆叠）
+    uw_vals = []
+    inv_vals = []
+    for co in cos:
+        for yr in years:
+            yr_str = str(yr)
+            uw_vals.append(data[co][yr_str]["承保"])
+            inv_vals.append(data[co][yr_str]["投资"])
+
+    # 承保利润（底部）
+    fig.add_trace(go.Bar(
+        name="承保利润",
+        x=x_vals,
+        y=uw_vals,
+        marker_color="#00338D",
+        text=[f"{v:.1f}" if v != 0 else "" for v in uw_vals],
+        textposition='inside',
+        insidetextanchor='middle',
+        textfont=dict(color="white", size=11),
+        width=0.6,
+    ))
+
+    # 投资利润（上部）
+    fig.add_trace(go.Bar(
+        name="投资利润",
+        x=x_vals,
+        y=inv_vals,
+        marker_color="#1E49E2",
+        text=[f"{v:.1f}" if v != 0 else "" for v in inv_vals],
+        textposition='inside',
+        insidetextanchor='middle',
+        textfont=dict(color="white", size=11),
+        width=0.6,
+    ))
+
+    # 添加总净利润（柱顶）及占比标注
+    for i, (co, yr) in enumerate([(co, yr) for co in cos for yr in years]):
+        total = uw_vals[i] + inv_vals[i]
+        if total != 0:
+            uw_pct = uw_vals[i] / total * 100
+            inv_pct = inv_vals[i] / total * 100
+            fig.add_annotation(
+                x=x_vals[i],
+                y=total + abs(total)*0.05 if total >= 0 else total - abs(total)*0.05,
+                text=f"{total:.1f}<br>({uw_pct:.1f}% / {inv_pct:.1f}%)",
+                showarrow=False,
+                font=dict(size=10, color="#333"),
+                yshift=5 if total >= 0 else -5,
+                xanchor="center"
+            )
+
+    # 添加公司边界（每组两个柱子）
+    for co in cos:
+        base = company_positions[co]
+        fig.add_shape(
+            type="rect",
+            xref="x", yref="paper",
+            x0=base-0.5, x1=base+1.5,
+            y0=0, y1=1,
+            fillcolor="rgba(200,200,200,0.05)",
+            line=dict(color="#CCCCCC", width=1.2),
+            layer="below"
+        )
+        fig.add_annotation(
+            x=base+0.5,
+            y=1.01,
+            text=f"<b>{co}</b>",
+            showarrow=False,
+            font=dict(size=12, color="#888888"),
+            xanchor="center",
+            yanchor="bottom",
+            xref="x",
+            yref="paper"
+        )
+
+    # 高亮追踪公司
+    if highlight_co != "无" and highlight_co in cos:
+        base = company_positions[highlight_co]
+        fig.add_shape(
+            type="rect",
+            xref="x", yref="paper",
+            x0=base-0.5, x1=base+1.5,
+            y0=0, y1=1,
+            fillcolor="rgba(0,51,141,0.05)",
+            line=dict(color="rgba(0,51,141,0.8)", width=1.5),
+            layer="below"
+        )
+
+    # 布局
+    fig.update_layout(
+        barmode='relative',  # 堆叠
+        xaxis=dict(
+            tickvals=x_vals,
+            ticktext=x_labels,
+            tickangle=-30,
+            tickfont=dict(size=10)
+        ),
+        yaxis=dict(
+            title=f"金额（{unit_label}）",
+            tickformat=",.0f",
+            zeroline=True,
+            zerolinecolor='gray'
+        ),
+        height=450,
+        margin=dict(t=60, b=80, l=40, r=20),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        bargap=0.15,
+        bargroupgap=0.1
+    )
+
+    return fig
 # 5.4 综合赔付率拆解堆叠图（自动提取年份，优化配色 + 公司边框 + 年份标注）
 def create_cor_breakdown_stacked_chart(df, cos, latest_year, prev_year, divisor=1, unit_label="百万元", highlight_co="无"):
     """
@@ -3701,8 +3873,14 @@ def render_pure_chart_entity(m_id, print_mode):
     # 关键指标 - 利润构成（承保 vs 投资 堆叠图）
     # ==========================================
     if m_id == "key_profit_composition":
-        fig = create_profit_composition_chart(
-            df_filtered, selected_cos, latest_year, divisor, unit_label
+        # 获取可用年份（取最近两年）
+        available_years = sorted([int(y) for y in df_filtered['报告年份'].unique() if str(y).isdigit()])
+        if len(available_years) >= 2:
+            years = [available_years[-2], available_years[-1]]  # 倒数第二年、最后一年
+        else:
+            years = [available_years[-1], available_years[-1]]  # 只有一年则重复
+        fig = create_profit_stacked_chart(
+            df_filtered, selected_cos, years, divisor, unit_label, current_hl
         )
         show_chart(fig, print_mode, m_id)
         display_notes(m_id, df_filtered, "利润构成")
