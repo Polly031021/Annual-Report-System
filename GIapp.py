@@ -1830,7 +1830,7 @@ def create_profit_stacked_pct_chart(df, cos, years, divisor=1, unit_label="百�
     """
     绘制每家公司承保利润与投资利润的百分比堆叠柱状图（两年对比）
     每个公司一个子图，柱高100%（绝对值），方向反映总利润正负。
-    内部显示各组成部分占绝对值比例，柱顶显示总利润金额。
+    内部显示各组成部分占绝对值比例，柱顶/底显示总利润金额。
     图例显示"保险服务业绩"和"投资服务业绩"。
     """
     field_uw = "承保利润"
@@ -1901,7 +1901,6 @@ def create_profit_stacked_pct_chart(df, cos, years, divisor=1, unit_label="百�
         uw_pcts = []
         inv_pcts = []
         total_vals = []
-        signs = []  # 记录总利润符号
 
         for yr in years:
             yr_str = str(yr)
@@ -1911,17 +1910,16 @@ def create_profit_stacked_pct_chart(df, cos, years, divisor=1, unit_label="百�
                 uw = data[co][yr_str]["承保"]
                 inv = data[co][yr_str]["投资"]
                 abs_total = abs(total)
+                # 计算占绝对值的百分比
                 uw_pct = (uw / abs_total) * 100
                 inv_pct = (inv / abs_total) * 100
-                # 如果总利润为负，整体方向向下，将两个占比转为负数
+                # 若总利润为负，整体方向向下
                 if total < 0:
                     uw_pct = -uw_pct
                     inv_pct = -inv_pct
-                signs.append(1 if total > 0 else -1)
             else:
                 uw_pct = 0
                 inv_pct = 0
-                signs.append(0)
             uw_pcts.append(uw_pct)
             inv_pcts.append(inv_pct)
 
@@ -1953,11 +1951,10 @@ def create_profit_stacked_pct_chart(df, cos, years, divisor=1, unit_label="百�
             showlegend=(col_idx == 0)
         ), row=1, col=col)
 
-        # 柱顶添加总利润金额（位置根据正负调整）
+        # 柱顶/底添加总利润金额
         for idx, yr in enumerate(years):
             total = total_vals[idx]
             if total != 0:
-                # 总利润为正时柱顶在 y=100，为负时柱底在 y=-100
                 y_pos = 105 if total > 0 else -105
                 fig.add_annotation(
                     x=x_labels[idx],
@@ -1995,7 +1992,6 @@ def create_profit_stacked_pct_chart(df, cos, years, divisor=1, unit_label="百�
         bargroupgap=0.1
     )
 
-    # 设置y轴范围，预留标注空间
     fig.update_yaxes(range=[-110, 110], tickformat=".0f", title_text="占比（%）", row=1, col=1)
     for i in range(1, n+1):
         fig.update_xaxes(tickangle=0, row=1, col=i)
@@ -3877,7 +3873,6 @@ def render_pure_chart_entity(m_id, print_mode):
     # 关键指标 - 利润构成（承保 vs 投资 堆叠图）
     # ==========================================
     if m_id == "key_profit_composition":
-        # 获取最近两年（若只有一年则重复）
         available_years = sorted([int(y) for y in df_filtered['报告年份'].unique() if str(y).isdigit()])
         if len(available_years) >= 2:
             years = [available_years[-2], available_years[-1]]
