@@ -4026,16 +4026,16 @@ def render_pure_chart_entity(m_id, print_mode):
             show_labels = st.session_state.get(f"lab_{m_id}", True)
             pct_sz = st.session_state.get(f"psz_{m_id}", 14)
             gap = st.session_state.get(f"gap_{m_id}", 0.15)
-        
+
         # ---- 只保留第二张图：综合费用率与赔付率 breakdown ----
         raw_df2 = df_filtered.copy()
         cos_list = st.session_state.get('selected_cos_cache', [])
         prev_y = st.session_state.get('prev_year', 2024)
         latest_y = st.session_state.get('latest_year', 2025)
         years = [str(prev_y), str(latest_y)]
-        
-        # 提取数据
-        metrics = ["综合赔付率", "综合费用率"]
+
+        # ===== 修改点1：同时提取"综合成本率"，作为灰色柱兜底数据 =====
+        metrics = ["综合赔付率", "综合费用率", "综合成本率"]
         data_dict = {}
         for co in cos_list:
             data_dict[co] = {}
@@ -4052,36 +4052,69 @@ def render_pure_chart_entity(m_id, print_mode):
                         data_dict[co][yr][m] = 0 if pd.isna(num_val) else float(num_val)
                     else:
                         data_dict[co][yr][m] = 0
-        
-        # 构造 x 轴位置和数值
+
+        # ===== 修改点2：构造数据，"无拆解但有COR"的位置走灰色柱 =====
         x_vals = []
-        y_exp = []   # 费用率
-        y_loss = []  # 赔付率
-        total_vals = []  # 综合成本率
-        for i, co in enumerate(cos_list):
-            base_idx = 2 * i
-            # 2024
-            x_vals.append(base_idx)
-            exp = data_dict[co][str(prev_y)]["综合费用率"]
-            loss = data_dict[co][str(prev_y)]["综合赔付率"]
-            y_exp.append(exp)
-            y_loss.append(loss)
-            total_vals.append(exp + loss)
-            # 2025
-            x_vals.append(base_idx + 1)
-            exp = data_dict[co][str(latest_y)]["综合费用率"]
-            loss = data_dict[co][str(latest_y)]["综合赔付率"]
-            y_exp.append(exp)
-            y_loss.append(loss)
-            total_vals.append(exp + loss)
-        
+        y_exp = []    # 费用率
+        y_loss = []   # 赔付率
+        y_cor = []    # 综合成本率（灰色兜底柱）
+        total_vals = []  # 柱顶总标注
+        missing_cos = []  # 记录未披露拆解的公司，用于脚注
+
+        for co in cos_list:
+            # 判断该公司是否所有年份都没有拆解数据（但有综合成本率）
+            has_no_breakdown = all(
+                data_dict[co][yr]["综合赔付率"] == 0 and
+                data_dict[co][yr]["综合费用率"] == 0
+                for yr in years
+            ) and any(
+                data_dict[co][yr]["综合成本率"] != 0
+                for yr in years
+            )
+            if has_no_breakdown:
+                missing_cos.append(co)
+
+            base_idx = 2 * len(x_vals) // 2  # 保持每组两个柱子的位置逻辑
+            group_start = 2 * cos_list.index(co)
+            for j, yr in enumerate(years):
+                x_vals.append(group_start + j)
+                exp = data_dict[co][yr]["综合费用率"]
+                loss = data_dict[co][yr]["综合赔付率"]
+                cor = data_dict[co][yr]["综合成本率"]
+                if exp == 0 and loss == 0 and cor != 0:
+                    # 未披露拆解 → 整根灰色柱显示综合成本率
+                    y_exp.append(0)
+                    y_loss.append(0)
+                    y_cor.append(cor)
+                    total_vals.append(cor)
+                else:
+                    # 正常情况 → 蓝色堆叠柱，灰色柱为0不显示
+                    y_exp.append(exp)
+                    y_loss.append(loss)
+                    y_cor.append(0)
+                    total_vals.append(exp + loss)
+
         # 年份标签（每个柱子对应一个年份）
         year_labels = []
         for _ in cos_list:
-            year_labels.append("2024YE")
-            year_labels.append("2025YE")
-        
+            year_labels.append(f"{prev_y}YE")
+            year_labels.append(f"{latest_y}YE")
+
         fig2 = go.Figure()
+
+        # ===== 修改点3：新增灰色兜底柱（正常公司该值为0，不会显示） =====
+        fig2.add_trace(go.Bar(
+            name="综合成本率（未披露拆解）",
+            x=x_vals,
+            y=y_cor,
+            marker_color="#B0BEC5",
+            text=[f"{v:.1%}" if show_labels and v != 0 else "" for v in y_cor],
+            textposition='inside',
+            insidetextanchor='middle',
+            textfont=dict(color="#333333", size=11),
+            width=0.8,
+        ))
+
         fig2.add_trace(go.Bar(
             name="综合费用率",
             x=x_vals,
@@ -4091,8 +4124,9 @@ def render_pure_chart_entity(m_id, print_mode):
             textposition='inside',
             insidetextanchor='middle',
             textfont=dict(color="white", size=11),
-            width=0.4,
+            width=0.8,
         ))
+
         fig2.add_trace(go.Bar(
             name="综合赔付率",
             x=x_vals,
@@ -4102,20 +4136,33 @@ def render_pure_chart_entity(m_id, print_mode):
             textposition='inside',
             insidetextanchor='middle',
             textfont=dict(color="white", size=11),
-            width=0.4,
+            width=0.8,
         ))
-        
-        # 添加综合成本率数值（柱顶）
-        for i, (x, total) in enumerate(zip(x_vals, total_vals)):
+
+        # 添加总数值标注（柱顶；灰色柱显示综合成本率本身）
+        for x, total in zip(x_vals, total_vals):
+            if total != 0:
+                fig2.add_annotation(
+                    x=x,
+                    y=total,
+                    text=f"{total:.1%}",
+                    showarrow=False,
+                    font=dict(size=12, color="#333"),
+                    yshift=5,
+                )
+
+        # ===== 修改点4：脚注，仿照 KPMG PPT 的 * 说明 =====
+        if missing_cos:
+            footnote = "*" + "、".join(missing_cos) + "年报中未详细披露综合费用率和综合赔付率"
             fig2.add_annotation(
-                x=x,
-                y=total,
-                text=f"{total:.1%}",
+                text=footnote,
+                xref="paper", yref="paper",
+                x=0, y=-0.30,
                 showarrow=False,
-                font=dict(size=12, color="#333"),
-                yshift=5,
+                xanchor="left",
+                font=dict(size=10, color="#888888", style="italic"),
             )
-        
+
         fig2.update_layout(
             barmode='relative',
             title="综合费用率与赔付率 breakdown",
@@ -4126,17 +4173,19 @@ def render_pure_chart_entity(m_id, print_mode):
                 tickfont=dict(size=11, family="Microsoft YaHei", color="#333", style="normal"),
             ),
             yaxis=dict(title="占保险服务收入比例", tickformat=".1%"),
-            height=400,
+            height=420,
             bargap=0.15,
+            # ===== 修改点5：底部留出脚注空间 =====
+            margin=dict(t=50, b=110),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
             plot_bgcolor='rgba(0,0,0,0)',
             paper_bgcolor='rgba(0,0,0,0)',
         )
-        
+
         # 添加公司名 annotations（每组柱子中间下方）
         for i, co in enumerate(cos_list):
             fig2.add_annotation(
-                x=2*i + 0.5,
+                x=2 * i + 0.5,
                 y=-0.08,  # 相对于图表高度的比例，放在 x 轴标签下方
                 text=co,
                 showarrow=False,
@@ -4146,47 +4195,10 @@ def render_pure_chart_entity(m_id, print_mode):
                 yanchor='top',
                 xanchor='center'
             )
-        
-        show_chart(fig2, print_mode, m_id)
-        
-        display_notes(m_id, df_filtered, "综合成本率")
-        display_bottom_note(notes_dict.get(m_id, {}).get('note', ''))
-        return
 
-    
-    if m_id in single_metric_map:
-        field_name, sort_by, is_pct = single_metric_map[m_id]
-        
-        # ----- 获取 UI 控件值（必须保留）-----
-        if not print_mode:
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                show_labels = st.toggle("显示标签", True, key=f"lab_{m_id}")
-            with c2:
-                pct_sz = st.slider("涨幅字号", 8, 24, 14, key=f"psz_{m_id}")
-            with c3:
-                gap = st.slider("柱间距", 0.1, 0.8, 0.15, key=f"gap_{m_id}")
-        else:
-            show_labels = st.session_state.get(f"lab_{m_id}", True)
-            pct_sz = st.session_state.get(f"psz_{m_id}", 14)
-            gap = st.session_state.get(f"gap_{m_id}", 0.15)
-        
-        # ----- 对“保费分析”指标强制限定“保费收入”类别 -----
-        premium_analysis_ids = ["premium_ranking", "new_old_ratio", "investment_component", "premium_growth"]
-        if m_id in premium_analysis_ids:
-            if '类别' in df_filtered.columns:
-                df_plot = df_filtered[df_filtered['类别'] == "保费收入"].copy()
-            else:
-                df_plot = df_filtered.copy()
-            if df_plot.empty:
-                df_plot = df_filtered.copy()
-        else:
-            df_plot = df_filtered.copy()
-        
-        fig = create_kpmg_chart(df_plot, field_name, "", show_labels, pct_sz, gap, 
-                                sort_by_value=sort_by, is_percentage=is_pct)
-        show_chart(fig, print_mode, m_id)
-        display_notes(m_id, df_filtered, field_name, is_pct)
+        show_chart(fig2, print_mode, m_id)
+
+        display_notes(m_id, df_filtered, "综合成本率")
         display_bottom_note(notes_dict.get(m_id, {}).get('note', ''))
         return
 
