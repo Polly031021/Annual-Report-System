@@ -5677,11 +5677,18 @@ if st.session_state['user_role'] == "项目组成员":
                     preview_idx = current_page - 1
                     if 0 <= preview_idx < total_pages:
                         page = doc.load_page(preview_idx)
-                        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
-                        if pix:
-                            st.image(pix.tobytes(), caption=f"当前预览：第 {current_page} 页 / 共 {total_pages} 页", use_column_width=True)
-                        else:
-                            st.warning("无法生成预览图像，请检查 PDF 文件是否损坏。")
+                        try:
+                            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+                            if pix is None:
+                                st.warning("无法生成该页预览，可能是空白页。")
+                            else:
+                                img_data = pix.tobytes("png")   # 明确输出 PNG 格式
+                                if img_data:
+                                    st.image(img_data, caption=f"当前预览：第 {current_page} 页 / 共 {total_pages} 页", use_column_width=True)
+                                else:
+                                    st.warning("生成的图像数据为空，请检查 PDF 内容。")
+                        except Exception as e:
+                            st.warning(f"预览失败：{e}")
                     elif current_page == 0:
                         st.info("尚未识别到页码，请在左侧输入框中手动填入。")
                     else:
