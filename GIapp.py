@@ -622,6 +622,19 @@ def ai_find_pages(pdf_bytes, api_key, target_tables, base_url, model_name, compa
                             if page_num not in found_hints.get("保险产品经营信息", []):
                                 found_hints.setdefault("保险产品经营信息", []).append(page_num)
 
+            # ---------- 5. 文本类披露：折现率、非金融风险调整 ----------
+            if "折现率披露" in target_tables:
+                if "折现率" in text_clean or "折现率假设" in text_clean:
+                    page_num = i + 1
+                    if page_num not in found_hints["折现率披露"]:
+                        found_hints["折现率披露"].append(page_num)
+            
+            if "非金融风险调整披露" in target_tables:
+                if "非金融风险调整" in text_clean:
+                    page_num = i + 1
+                    if page_num not in found_hints["非金融风险调整披露"]:
+                        found_hints["非金融风险调整披露"].append(page_num)
+
         # ==========================================================
         # 公司口径过滤
         # ==========================================================
