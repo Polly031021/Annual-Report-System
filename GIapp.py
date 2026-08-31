@@ -5678,7 +5678,10 @@ if st.session_state['user_role'] == "项目组成员":
                     if 0 <= preview_idx < total_pages:
                         page = doc.load_page(preview_idx)
                         pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
-                        st.image(pix.tobytes("png"), caption=f"当前预览：第 {current_page} 页 / 共 {total_pages} 页", use_column_width=True)
+                        if pix:
+                            st.image(pix.tobytes(), caption=f"当前预览：第 {current_page} 页 / 共 {total_pages} 页", use_column_width=True)
+                        else:
+                            st.warning("无法生成预览图像，请检查 PDF 文件是否损坏。")
                     elif current_page == 0:
                         st.info("尚未识别到页码，请在左侧输入框中手动填入。")
                     else:
