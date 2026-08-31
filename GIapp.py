@@ -497,8 +497,7 @@ def ai_find_pages(pdf_bytes, api_key, target_tables, base_url, model_name, compa
         
         context_anchors = ["项目注释", "财务报表附注", "报表附注", "项目附注"]
         
-        found_hints = {table: [] for table in target_tables if table in feature_matrix or table in simple_title_OR or table == "保险合同负债及资产" or table == "保险产品经营信息"}
-
+        found_hints = {table: [] for table in target_tables}   # 为所有目标表都初始化空列表
         # ====== 新增：初始化 page_type_map ======
         page_type_map = {}
 
@@ -5587,7 +5586,9 @@ if st.session_state['user_role'] == "项目组成员":
                         "业务及管理费",
                         "公司资产负债表",
                         "主要经营指标",
-                        "保险产品经营信息"   # 新增
+                        "保险产品经营信息",
+                        "折现率披露",
+                        "非金融风险调整披露"  # 新增
                     ],
                     default=["保险合同负债及资产", "公司利润表", "公司资产负债表"]
                 )
