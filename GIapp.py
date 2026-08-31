@@ -5682,9 +5682,9 @@ if st.session_state['user_role'] == "项目组成员":
                             if pix is None:
                                 st.warning("无法生成该页预览，可能是空白页。")
                             else:
-                                img_data = pix.tobytes("png")   # 明确输出 PNG 格式
+                                img_data = pix.tobytes("png")   # 明确指定 PNG 格式
                                 if img_data:
-                                    st.image(img_data, caption=f"当前预览：第 {current_page} 页 / 共 {total_pages} 页", use_column_width=True)
+                                    st.image(img_data, caption=f"当前预览：第 {current_page} 页 / 共 {total_pages} 页", use_container_width=True)
                                 else:
                                     st.warning("生成的图像数据为空，请检查 PDF 内容。")
                         except Exception as e:
