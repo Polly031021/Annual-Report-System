@@ -4201,6 +4201,42 @@ def render_pure_chart_entity(m_id, print_mode):
         display_bottom_note(notes_dict.get(m_id, {}).get('note', ''))
         return
 
+    if m_id in single_metric_map:
+        field_name, sort_by, is_pct = single_metric_map[m_id]
+
+        # ----- 获取 UI 控件值（必须保留）-----
+        if not print_mode:
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                show_labels = st.toggle("显示标签", True, key=f"lab_{m_id}")
+            with c2:
+                pct_sz = st.slider("涨幅字号", 8, 24, 14, key=f"psz_{m_id}")
+            with c3:
+                gap = st.slider("柱间距", 0.1, 0.8, 0.15, key=f"gap_{m_id}")
+        else:
+            show_labels = st.session_state.get(f"lab_{m_id}", True)
+            pct_sz = st.session_state.get(f"psz_{m_id}", 14)
+            gap = st.session_state.get(f"gap_{m_id}", 0.15)
+
+        # ----- 对“保费分析”指标强制限定“保费收入”类别 -----
+        premium_analysis_ids = ["premium_ranking", "new_old_ratio", "investment_component", "premium_growth"]
+        if m_id in premium_analysis_ids:
+            if '类别' in df_filtered.columns:
+                df_plot = df_filtered[df_filtered['类别'] == "保费收入"].copy()
+            else:
+                df_plot = df_filtered.copy()
+            if df_plot.empty:
+                df_plot = df_filtered.copy()
+        else:
+            df_plot = df_filtered.copy()
+
+        fig = create_kpmg_chart(df_plot, field_name, "", show_labels, pct_sz, gap,
+                                sort_by_value=sort_by, is_percentage=is_pct)
+        show_chart(fig, print_mode, m_id)
+        display_notes(m_id, df_filtered, field_name, is_pct)
+        display_bottom_note(notes_dict.get(m_id, {}).get('note', ''))
+        return
+
 
     # ==========================================
     # 3. 综合赔付拆解（多因子分组柱状图）
