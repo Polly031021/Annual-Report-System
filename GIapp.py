@@ -2932,7 +2932,7 @@ def create_disclosure_table(df, field_name, title, cos, years):
     pivot = pivot[sorted(pivot.columns, key=lambda x: int(x))]
 
     # 准备表格数据
-    header_vals = ['公司'] + [f'{y}YE' for y in pivot.columns]
+    header_vals = ['公司'] + [f'{y}年12月31日' for y in pivot.columns]
     cell_vals = [pivot.index.tolist()]
     for col in pivot.columns:
         cell_vals.append(pivot[col].fillna('未披露').tolist())
@@ -2959,6 +2959,90 @@ def create_disclosure_table(df, field_name, title, cos, years):
     )
     return fig
 
+
+# 5.11 非金融风险调整表格
+def create_risk_margin_table(df, cos, title="非金融风险调整披露"):
+    """
+    生成非金融风险调整表格，展示每个公司的“方法”和“置信水平”（取最新年份）
+    df: 集成数据，需包含 '公司', '字段名', '(百万)人民币' 等列
+    cos: 公司列表（按显示顺序）
+    title: 表格标题
+    返回: Plotly 表格对象
+    """
+    field_name = '非金融风险调整'
+    df_sub = df[df['字段名'] == field_name].copy()
+    if df_sub.empty:
+        fig = go.Figure()
+        fig.add_annotation(text="暂无数据", x=0.5, y=0.5, showarrow=False)
+        fig.update_layout(height=300)
+        return fig
+
+    # 取每个公司最新年份的数据（如果有多个年份，取最大的）
+    df_sub['报告年份'] = df_sub['报告年份'].astype(int)
+    df_sub = df_sub.sort_values(['公司', '报告年份'], ascending=[True, False])
+    df_sub = df_sub.drop_duplicates(subset=['公司'], keep='first')
+    df_sub = df_sub.set_index('公司').reindex(cos).reset_index()
+
+    # 提取值并解析方法和置信水平
+    values = df_sub['(百万)人民币'].fillna('').astype(str).tolist()
+    methods = []
+    confidences = []
+    import re
+
+    for val in values:
+        if not val or val == 'nan' or val == '':
+            methods.append('')
+            confidences.append('')
+            continue
+
+        # 尝试提取方法（关键词：法、方法）
+        # 例如 "置信水平法"、"资本成本法"等
+        method_match = re.search(r'([^,，]+?(?:法|方法))', val)
+        if method_match:
+            methods.append(method_match.group(1).strip())
+        else:
+            # 如果没匹配到“法”，尝试寻找“采用”等词后面的名词
+            fallback_match = re.search(r'采用\s*([^,，]+?)(?:，|,|、|及)', val)
+            if fallback_match:
+                methods.append(fallback_match.group(1).strip() + '法')
+            else:
+                methods.append('未披露')
+
+        # 提取置信水平（百分比或范围）
+        confidence_match = re.search(r'(\d+(?:\.\d+)?%\s*(?:[-~]\s*\d+(?:\.\d+)?%)?)', val)
+        if confidence_match:
+            confidences.append(confidence_match.group(1).strip())
+        else:
+            # 可能没有%符号，尝试匹配纯数字（但这种情况少见）
+            num_match = re.search(r'(\d+(?:\.\d+)?)', val)
+            if num_match:
+                confidences.append(num_match.group(1) + '%')
+            else:
+                confidences.append('未披露')
+
+    # 构建 Plotly 表格
+    fig = go.Figure(data=[go.Table(
+        header=dict(
+            values=['公司名称', '方法', '置信水平'],
+            fill_color='#00338D',
+            align='center',
+            font=dict(color='white', size=13)
+        ),
+        cells=dict(
+            values=[cos, methods, confidences],
+            fill_color=[['#F8F9FA', 'white'] * (len(cos)//2 + 1)],
+            align='center',
+            font=dict(size=12)
+        )
+    )])
+    fig.update_layout(
+        title=title,
+        margin=dict(l=10, r=10, t=50, b=10),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)'
+    )
+    return fig
+    
 # 6.汇总表
 def create_nonlife_summary_table(df, cos, highlight_co="无"):
     cy, py = latest_year, prev_year
@@ -3798,15 +3882,7 @@ def render_pure_chart_entity(m_id, print_mode):
     # 文本披露 - 非金融风险调整表格
     # ==========================================
     if m_id == "risk_margin":
-        available_years = sorted([int(y) for y in df_filtered['报告年份'].unique() if y.isdigit()])
-        years_to_show = available_years[-2:] if len(available_years) >= 2 else available_years
-        fig = create_disclosure_table(
-            df_filtered, 
-            field_name='非金融风险调整',   # 请确认实际字段名
-            title='非金融风险调整披露', 
-            cos=selected_cos, 
-            years=years_to_show
-        )
+        fig = create_risk_margin_table(df_filtered, selected_cos, title='非金融风险调整披露')
         show_chart(fig, print_mode, m_id)
         display_notes(m_id, df_filtered, "非金融风险调整")
         display_bottom_note(notes_dict.get(m_id, {}).get('note', ''))
