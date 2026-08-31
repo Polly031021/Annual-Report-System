@@ -2995,31 +2995,37 @@ def create_risk_margin_table(df, cos, title="非金融风险调整披露"):
             confidences.append('')
             continue
 
-        # 尝试提取方法（关键词：法、方法）
-        # 例如 "置信水平法"、"资本成本法"等
-        method_match = re.search(r'([^,，]+?(?:法|方法))', val)
-        if method_match:
-            methods.append(method_match.group(1).strip())
-        else:
-            # 如果没匹配到“法”，尝试寻找“采用”等词后面的名词
-            fallback_match = re.search(r'采用\s*([^,，]+?)(?:，|,|、|及)', val)
-            if fallback_match:
-                methods.append(fallback_match.group(1).strip() + '法')
-            else:
-                methods.append('未披露')
-
-        # 提取置信水平（百分比或范围）
+        # ---- 1. 提取置信水平（百分比或范围） ----
         confidence_match = re.search(r'(\d+(?:\.\d+)?%\s*(?:[-~]\s*\d+(?:\.\d+)?%)?)', val)
         if confidence_match:
-            confidences.append(confidence_match.group(1).strip())
+            confidence = confidence_match.group(1).strip()
+            confidences.append(confidence)
         else:
-            # 可能没有%符号，尝试匹配纯数字（但这种情况少见）
+            # 尝试提取纯数字（可能不带%）
             num_match = re.search(r'(\d+(?:\.\d+)?)', val)
             if num_match:
                 confidences.append(num_match.group(1) + '%')
             else:
                 confidences.append('未披露')
 
+        # ---- 2. 提取方法：按逗号分割取第一部分 ----
+        # 先尝试按逗号（中文或英文）分割
+        parts = re.split(r'[，,]', val)
+        if len(parts) >= 2:
+            # 第一部分作为方法
+            method = parts[0].strip()
+            # 移除方法末尾可能多余的分隔符（如"、"）
+            method = re.sub(r'[、，]\s*$', '', method)
+            methods.append(method if method else '未披露')
+        else:
+            # 没有逗号，尝试提取含"法"的部分
+            method_match = re.search(r'([^，,]+?(?:法|方法))', val)
+            if method_match:
+                methods.append(method_match.group(1).strip())
+            else:
+                # 如果都没有，则整体作为方法（不含置信水平）
+                methods.append(val.strip())
+                
     # 构建 Plotly 表格
     fig = go.Figure(data=[go.Table(
         header=dict(
