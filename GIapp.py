@@ -4019,9 +4019,9 @@ def render_pure_chart_entity(m_id, print_mode):
             with c1:
                 show_labels = st.toggle("显示标签", True, key=f"lab_{m_id}")
             with c2:
-                pct_sz = st.slider("涨幅字号", 8, 24, 14, key=f"psz_{m_id}")   # 不再使用
+                pct_sz = st.slider("涨幅字号", 8, 24, 14, key=f"psz_{m_id}")
             with c3:
-                gap = st.slider("柱间距", 0.1, 0.8, 0.15, key=f"gap_{m_id}")   # 不再使用
+                gap = st.slider("柱间距", 0.1, 0.8, 0.15, key=f"gap_{m_id}")
         else:
             show_labels = st.session_state.get(f"lab_{m_id}", True)
             pct_sz = st.session_state.get(f"psz_{m_id}", 14)
@@ -4034,7 +4034,7 @@ def render_pure_chart_entity(m_id, print_mode):
         latest_y = st.session_state.get('latest_year', 2025)
         years = [str(prev_y), str(latest_y)]
 
-        # ===== 修改点1：同时提取"综合成本率"，作为灰色柱兜底数据 =====
+        # 提取数据（含综合成本率，用于灰色兜底柱）
         metrics = ["综合赔付率", "综合费用率", "综合成本率"]
         data_dict = {}
         for co in cos_list:
@@ -4053,16 +4053,15 @@ def render_pure_chart_entity(m_id, print_mode):
                     else:
                         data_dict[co][yr][m] = 0
 
-        # ===== 修改点2：构造数据，"无拆解但有COR"的位置走灰色柱 =====
+        # 构造数据，"无拆解但有COR"的位置走灰色柱
         x_vals = []
-        y_exp = []    # 费用率
-        y_loss = []   # 赔付率
-        y_cor = []    # 综合成本率（灰色兜底柱）
-        total_vals = []  # 柱顶总标注
-        missing_cos = []  # 记录未披露拆解的公司，用于脚注
+        y_exp = []
+        y_loss = []
+        y_cor = []
+        total_vals = []
+        missing_cos = []
 
         for co in cos_list:
-            # 判断该公司是否所有年份都没有拆解数据（但有综合成本率）
             has_no_breakdown = all(
                 data_dict[co][yr]["综合赔付率"] == 0 and
                 data_dict[co][yr]["综合费用率"] == 0
@@ -4074,7 +4073,6 @@ def render_pure_chart_entity(m_id, print_mode):
             if has_no_breakdown:
                 missing_cos.append(co)
 
-            base_idx = 2 * len(x_vals) // 2  # 保持每组两个柱子的位置逻辑
             group_start = 2 * cos_list.index(co)
             for j, yr in enumerate(years):
                 x_vals.append(group_start + j)
@@ -4082,19 +4080,16 @@ def render_pure_chart_entity(m_id, print_mode):
                 loss = data_dict[co][yr]["综合赔付率"]
                 cor = data_dict[co][yr]["综合成本率"]
                 if exp == 0 and loss == 0 and cor != 0:
-                    # 未披露拆解 → 整根灰色柱显示综合成本率
                     y_exp.append(0)
                     y_loss.append(0)
                     y_cor.append(cor)
                     total_vals.append(cor)
                 else:
-                    # 正常情况 → 蓝色堆叠柱，灰色柱为0不显示
                     y_exp.append(exp)
                     y_loss.append(loss)
                     y_cor.append(0)
                     total_vals.append(exp + loss)
 
-        # 年份标签（每个柱子对应一个年份）
         year_labels = []
         for _ in cos_list:
             year_labels.append(f"{prev_y}YE")
@@ -4102,62 +4097,78 @@ def render_pure_chart_entity(m_id, print_mode):
 
         fig2 = go.Figure()
 
-        # ===== 修改点3：新增灰色兜底柱（正常公司该值为0，不会显示） =====
         fig2.add_trace(go.Bar(
             name="综合成本率（未披露拆解）",
-            x=x_vals,
-            y=y_cor,
+            x=x_vals, y=y_cor,
             marker_color="#B0BEC5",
             text=[f"{v:.1%}" if show_labels and v != 0 else "" for v in y_cor],
-            textposition='inside',
-            insidetextanchor='middle',
+            textposition='inside', insidetextanchor='middle',
             textfont=dict(color="#333333", size=11),
             width=0.8,
         ))
-
         fig2.add_trace(go.Bar(
             name="综合费用率",
-            x=x_vals,
-            y=y_exp,
+            x=x_vals, y=y_exp,
             marker_color="#1E49E2",
             text=[f"{v:.1%}" if show_labels and v != 0 else "" for v in y_exp],
-            textposition='inside',
-            insidetextanchor='middle',
+            textposition='inside', insidetextanchor='middle',
             textfont=dict(color="white", size=11),
             width=0.8,
         ))
-
         fig2.add_trace(go.Bar(
             name="综合赔付率",
-            x=x_vals,
-            y=y_loss,
+            x=x_vals, y=y_loss,
             marker_color="#00338D",
             text=[f"{v:.1%}" if show_labels and v != 0 else "" for v in y_loss],
-            textposition='inside',
-            insidetextanchor='middle',
+            textposition='inside', insidetextanchor='middle',
             textfont=dict(color="white", size=11),
             width=0.8,
         ))
 
-        # 添加总数值标注（柱顶；灰色柱显示综合成本率本身）
+        # 柱顶总标注
         for x, total in zip(x_vals, total_vals):
             if total != 0:
                 fig2.add_annotation(
-                    x=x,
-                    y=total,
-                    text=f"{total:.1%}",
-                    showarrow=False,
-                    font=dict(size=12, color="#333"),
-                    yshift=5,
+                    x=x, y=total, text=f"{total:.1%}",
+                    showarrow=False, font=dict(size=12, color="#333"), yshift=5,
                 )
 
-        # ===== 修改点4：脚注，仿照 KPMG PPT 的 * 说明 =====
+        # ===== 修改点1：每家公司加框线（矩形边框区分分组） =====
+        for i, co in enumerate(cos_list):
+            group_start = 2 * i
+            fig2.add_shape(
+                type="rect",
+                xref='x', yref='paper',
+                x0=group_start - 0.45,   # 组左边界（柱宽0.8，柱心在 2i 和 2i+1）
+                x1=group_start + 1.45,   # 组右边界
+                y0=0,
+                y1=1,
+                line=dict(color="#CCCCCC", width=1),
+                fillcolor="rgba(0,0,0,0)",   # 不填充，只画边框
+                layer="below",
+            )
+
+        # ===== 修改点2：公司名移到框线上方（原来在 y=-0.08 下方） =====
+        for i, co in enumerate(cos_list):
+            fig2.add_annotation(
+                x=2 * i + 0.5,           # 组中心
+                y=1.02,                  # 图表区域上方
+                text=co,
+                showarrow=False,
+                font=dict(size=13, family="Microsoft YaHei", color="#333", style="normal"),
+                xref='x',
+                yref='paper',
+                yanchor='bottom',
+                xanchor='center'
+            )
+
+        # 脚注
         if missing_cos:
             footnote = "*" + "、".join(missing_cos) + "年报中未详细披露综合费用率和综合赔付率"
             fig2.add_annotation(
                 text=footnote,
                 xref="paper", yref="paper",
-                x=0, y=-0.30,
+                x=0, y=-0.28,
                 showarrow=False,
                 xanchor="left",
                 font=dict(size=10, color="#888888", style="italic"),
@@ -4172,35 +4183,24 @@ def render_pure_chart_entity(m_id, print_mode):
                 tickangle=-30,
                 tickfont=dict(size=11, family="Microsoft YaHei", color="#333", style="normal"),
             ),
-            yaxis=dict(title="占保险服务收入比例", tickformat=".1%"),
-            height=420,
+            yaxis=dict(title="占保险服务收入比例", tickformat=".1%",
+                       range=[0, None]),   # 框线从0起，y轴不从负值开始
+            height=450,
             bargap=0.15,
-            # ===== 修改点5：底部留出脚注空间 =====
-            margin=dict(t=50, b=110),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
+            # ===== 修改点3：顶部留出公司名+图例空间，底部留脚注空间 =====
+            margin=dict(t=90, b=110),
+            # 图例上移，避免和公司名重叠
+            legend=dict(orientation="h", yanchor="bottom", y=1.14, xanchor="center", x=0.5),
             plot_bgcolor='rgba(0,0,0,0)',
             paper_bgcolor='rgba(0,0,0,0)',
         )
-
-        # 添加公司名 annotations（每组柱子中间下方）
-        for i, co in enumerate(cos_list):
-            fig2.add_annotation(
-                x=2 * i + 0.5,
-                y=-0.08,  # 相对于图表高度的比例，放在 x 轴标签下方
-                text=co,
-                showarrow=False,
-                font=dict(size=12, family="Microsoft YaHei", color="#333", style="normal"),
-                xref='x',
-                yref='paper',
-                yanchor='top',
-                xanchor='center'
-            )
 
         show_chart(fig2, print_mode, m_id)
 
         display_notes(m_id, df_filtered, "综合成本率")
         display_bottom_note(notes_dict.get(m_id, {}).get('note', ''))
         return
+
 
     # ==========================================
     # 3. 综合赔付拆解（多因子分组柱状图）
