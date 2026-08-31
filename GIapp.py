@@ -3776,11 +3776,47 @@ def render_pure_chart_entity(m_id, print_mode):
         display_notes(m_id, df_filtered, "概览")
         display_bottom_note(notes_dict.get(m_id, {}).get('note', ''))
         return
+    # ==========================================
+    # 文本披露 - 折现率表格
+    # ==========================================
+    if m_id == "discount_rate":
+        available_years = sorted([int(y) for y in df_filtered['报告年份'].unique() if y.isdigit()])
+        years_to_show = available_years[-2:] if len(available_years) >= 2 else available_years
+        fig = create_disclosure_table(
+            df_filtered, 
+            field_name='折现率假设',      # 请确认实际字段名
+            title='折现率假设披露', 
+            cos=selected_cos, 
+            years=years_to_show
+        )
+        show_chart(fig, print_mode, m_id)
+        display_notes(m_id, df_filtered, "折现率")
+        display_bottom_note(notes_dict.get(m_id, {}).get('note', ''))
+        return
+    
+    # ==========================================
+    # 文本披露 - 非金融风险调整表格
+    # ==========================================
+    if m_id == "risk_margin":
+        available_years = sorted([int(y) for y in df_filtered['报告年份'].unique() if y.isdigit()])
+        years_to_show = available_years[-2:] if len(available_years) >= 2 else available_years
+        fig = create_disclosure_table(
+            df_filtered, 
+            field_name='非金融风险调整',   # 请确认实际字段名
+            title='非金融风险调整披露', 
+            cos=selected_cos, 
+            years=years_to_show
+        )
+        show_chart(fig, print_mode, m_id)
+        display_notes(m_id, df_filtered, "非金融风险调整")
+        display_bottom_note(notes_dict.get(m_id, {}).get('note', ''))
+        return
     
     # ==========================================
     # 1. 文本类披露（已在主调度中单独处理，此处留空以防误调用）
     # ==========================================
-    if m_id in ["policy_method", "discount_rate", "risk_margin"]:
+    if m_id == "policy_method":
+        # 如果 policy_method 也需要表格，可以参照下面改为表格；否则保留原样
         display_textual_disclosures(df_filtered, selected_cos, latest_year)
         display_notes(m_id, df_filtered, "")
         display_bottom_note(notes_dict.get(m_id, {}).get('note', ''))
@@ -4539,43 +4575,6 @@ def render_pure_chart_entity(m_id, print_mode):
         )
         show_chart(fig, print_mode, m_id)
         display_notes(m_id, df_filtered, "利润构成")
-        display_bottom_note(notes_dict.get(m_id, {}).get('note', ''))
-        return
-
-    # ==========================================
-    # 文本披露 - 折现率表格
-    # ==========================================
-    if m_id == "discount_rate":
-        # 获取数据中存在的年份，取最近两年（也可取全部，根据需求调整）
-        available_years = sorted([int(y) for y in df_filtered['报告年份'].unique() if y.isdigit()])
-        years_to_show = available_years[-2:] if len(available_years) >= 2 else available_years
-        fig = create_disclosure_table(
-            df_filtered, 
-            field_name='折现率假设',      # 请确认实际字段名，可能为 "折现率" 或 "折现率假设"
-            title='折现率假设披露', 
-            cos=selected_cos, 
-            years=years_to_show
-        )
-        show_chart(fig, print_mode, m_id)
-        display_notes(m_id, df_filtered, "折现率")
-        display_bottom_note(notes_dict.get(m_id, {}).get('note', ''))
-        return
-    
-    # ==========================================
-    # 文本披露 - 非金融风险调整表格
-    # ==========================================
-    if m_id == "risk_margin":
-        available_years = sorted([int(y) for y in df_filtered['报告年份'].unique() if y.isdigit()])
-        years_to_show = available_years[-2:] if len(available_years) >= 2 else available_years
-        fig = create_disclosure_table(
-            df_filtered, 
-            field_name='非金融风险调整',   # 请确认实际字段名，可能为 "非金融风险调整" 或 "风险边际"
-            title='非金融风险调整披露', 
-            cos=selected_cos, 
-            years=years_to_show
-        )
-        show_chart(fig, print_mode, m_id)
-        display_notes(m_id, df_filtered, "非金融风险调整")
         display_bottom_note(notes_dict.get(m_id, {}).get('note', ''))
         return
     # ==========================================
