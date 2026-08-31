@@ -2906,6 +2906,59 @@ def create_line_subplots_chart(df, field_name, cos, years, divisor=1, unit_label
 
     return fig
 
+# 5.10 折现率、非金融风险调整的表格
+def create_disclosure_table(df, field_name, title, cos, years):
+    """
+    生成文本披露（如折现率、非金融风险调整）的表格
+    df: 集成数据框，需包含 '公司', '报告年份', '字段名', '(百万)人民币' 等列
+    field_name: 要展示的字段名（如 '折现率假设'）
+    title: 表格标题
+    cos: 公司列表（按显示顺序）
+    years: 要显示的年份列表（如 [2024, 2025]）
+    """
+    # 筛选数据
+    df_sub = df[df['字段名'] == field_name].copy()
+    if df_sub.empty:
+        fig = go.Figure()
+        fig.add_annotation(text="暂无数据", x=0.5, y=0.5, showarrow=False)
+        fig.update_layout(height=300)
+        return fig
+
+    # 透视：公司 × 年份 -> 值（文本）
+    pivot = df_sub.pivot_table(index='公司', columns='报告年份', values='(百万)人民币', aggfunc='first')
+    # 只保留指定的公司和年份
+    pivot = pivot.reindex(index=cos, columns=[str(y) for y in years])
+    # 将年份列名排序
+    pivot = pivot[sorted(pivot.columns, key=lambda x: int(x))]
+
+    # 准备表格数据
+    header_vals = ['公司'] + [f'{y}YE' for y in pivot.columns]
+    cell_vals = [pivot.index.tolist()]
+    for col in pivot.columns:
+        cell_vals.append(pivot[col].fillna('未披露').tolist())
+
+    fig = go.Figure(data=[go.Table(
+        header=dict(
+            values=header_vals,
+            fill_color='#00338D',
+            align='center',
+            font=dict(color='white', size=13)
+        ),
+        cells=dict(
+            values=cell_vals,
+            fill_color=[['#F8F9FA', 'white'] * (len(pivot)//2 + 1)],
+            align='center',
+            font=dict(size=12)
+        )
+    )])
+    fig.update_layout(
+        title=title,
+        margin=dict(l=10, r=10, t=50, b=10),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)'
+    )
+    return fig
+
 # 6.汇总表
 def create_nonlife_summary_table(df, cos, highlight_co="无"):
     cy, py = latest_year, prev_year
@@ -4486,6 +4539,43 @@ def render_pure_chart_entity(m_id, print_mode):
         )
         show_chart(fig, print_mode, m_id)
         display_notes(m_id, df_filtered, "利润构成")
+        display_bottom_note(notes_dict.get(m_id, {}).get('note', ''))
+        return
+
+    # ==========================================
+    # 文本披露 - 折现率表格
+    # ==========================================
+    if m_id == "discount_rate":
+        # 获取数据中存在的年份，取最近两年（也可取全部，根据需求调整）
+        available_years = sorted([int(y) for y in df_filtered['报告年份'].unique() if y.isdigit()])
+        years_to_show = available_years[-2:] if len(available_years) >= 2 else available_years
+        fig = create_disclosure_table(
+            df_filtered, 
+            field_name='折现率假设',      # 请确认实际字段名，可能为 "折现率" 或 "折现率假设"
+            title='折现率假设披露', 
+            cos=selected_cos, 
+            years=years_to_show
+        )
+        show_chart(fig, print_mode, m_id)
+        display_notes(m_id, df_filtered, "折现率")
+        display_bottom_note(notes_dict.get(m_id, {}).get('note', ''))
+        return
+    
+    # ==========================================
+    # 文本披露 - 非金融风险调整表格
+    # ==========================================
+    if m_id == "risk_margin":
+        available_years = sorted([int(y) for y in df_filtered['报告年份'].unique() if y.isdigit()])
+        years_to_show = available_years[-2:] if len(available_years) >= 2 else available_years
+        fig = create_disclosure_table(
+            df_filtered, 
+            field_name='非金融风险调整',   # 请确认实际字段名，可能为 "非金融风险调整" 或 "风险边际"
+            title='非金融风险调整披露', 
+            cos=selected_cos, 
+            years=years_to_show
+        )
+        show_chart(fig, print_mode, m_id)
+        display_notes(m_id, df_filtered, "非金融风险调整")
         display_bottom_note(notes_dict.get(m_id, {}).get('note', ''))
         return
     # ==========================================
